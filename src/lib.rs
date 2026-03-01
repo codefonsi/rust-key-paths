@@ -28,6 +28,55 @@ pub use lock::{
 // Export the async_lock module
 pub mod async_lock;
 
+
+
+// pub struct KpStatic<R, V> {
+//     pub get: fn(&R) -> Option<&V>,
+//     pub set: fn(&mut R) -> Option<&mut V>,
+// }
+//
+// // KpStatic holds only fn pointers; it is a functional component with no owned data.
+// unsafe impl<R, V> Send for KpStatic<R, V> {}
+// unsafe impl<R, V> Sync for KpStatic<R, V> {}
+//
+// impl<R, V> KpStatic<R, V> {
+//     pub const fn new(
+//         get: fn(&R) -> Option<&V>,
+//         set: fn(&mut R) -> Option<&mut V>,
+//     ) -> Self {
+//         Self { get, set }
+//     }
+//
+//     #[inline(always)]
+//     pub fn get<'a>(&self, root: &'a R) -> Option<&'a V> {
+//         (self.get)(root)
+//     }
+//
+//     #[inline(always)]
+//     pub fn set<'a>(&self, root: &'a mut R) -> Option<&'a mut V> {
+//         (self.set)(root)
+//     }
+// }
+
+// // Macro generates:
+// #[inline(always)]
+// fn __get_static_str_field(x: &AllContainersTest) -> Option<&'static str> {
+//     Some(&x.static_str_field)
+// }
+//
+// #[inline(always)]
+// fn __set_static_str_field(x: &mut AllContainersTest) -> Option<&mut &'static str> {
+//     Some(&mut x.static_str_field)
+// }
+//
+// pub static STATIC_STR_FIELD_KP: KpStatic<AllContainersTest, &'static str> =
+//     KpStatic::new(__get_static_str_field, __set_static_str_field);
+
+
+
+#[cfg(feature = "pin_project")]
+pub mod pin;
+
 /// Used so that `then_async` can infer `V2` from `AsyncKp::Value` without ambiguity
 /// (e.g. `&i32` has both `Borrow<i32>` and `Borrow<&i32>`; this picks the referent).
 /// Implemented only for reference types so there is no overlap with the blanket impl.
@@ -48,8 +97,8 @@ pub type KpDynamic<R, V> = Kp<
     &'static V,
     &'static mut R,
     &'static mut V,
-    Box<dyn for<'a> Fn(&'a R) -> Option<&'a V>>,
-    Box<dyn for<'a> Fn(&'a mut R) -> Option<&'a mut V>>,
+    Box<dyn for<'a> Fn(&'a R) -> Option<&'a V> + Send + Sync>,
+    Box<dyn for<'a> Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync>,
 >;
 
 pub type KpType<'a, R, V> = Kp<
@@ -62,6 +111,35 @@ pub type KpType<'a, R, V> = Kp<
     for<'b> fn(&'b R) -> Option<&'b V>,
     for<'b> fn(&'b mut R) -> Option<&'b mut V>,
 >;
+
+impl<'a, R, V> KpType<'a, R, V>
+where
+    'a: 'static,
+{
+    /// Converts this keypath (KpType) to [KpDynamic] for dynamic dispatch and storage.
+    /// Requires `'a: 'static` so the boxed getter/setter closures can be `'static`.
+    #[inline]
+    pub fn to_dynamic(self) -> KpDynamic<R, V> {
+        self.into()
+    }
+}
+
+impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>
+where
+    'a: 'static,
+    R: 'static,
+    V: 'static,
+{
+    #[inline]
+    fn from(kp: KpType<'a, R, V>) -> Self {
+        let get_fn = kp.get;
+        let set_fn = kp.set;
+        Kp::new(
+            Box::new(move |t: &R| get_fn(t)),
+            Box::new(move |t: &mut R| set_fn(t)),
+        )
+    }
+}
 
 // pub type KpType<R, V> = Kp<
 //     R,
@@ -105,8 +183,8 @@ pub type KpComposed<R, V> = Kp<
     &'static V,
     &'static mut R,
     &'static mut V,
-    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V>>,
-    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V>>,
+    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
 >;
 
 impl<R, V> Kp<
@@ -116,15 +194,15 @@ impl<R, V> Kp<
     &'static V,
     &'static mut R,
     &'static mut V,
-    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V>>,
-    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V>>,
+    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
 > {
     /// Build a keypath from two closures (e.g. when they capture a variable like an index).
     /// Same pattern as `Kp::new` in lock.rs; use this when the keypath captures variables.
     pub fn from_closures<G, S>(get: G, set: S) -> Self
     where
-        G: for<'b> Fn(&'b R) -> Option<&'b V> + 'static,
-        S: for<'b> Fn(&'b mut R) -> Option<&'b mut V> + 'static,
+        G: for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync + 'static,
+        S: for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync + 'static,
     {
         Self::new(Box::new(get), Box::new(set))
     }
@@ -647,6 +725,26 @@ where
     _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
 }
 
+// Kp is a functional component (get/set) with no owned data; Send/Sync follow from G and S.
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value> + Send,
+    S: Fn(MutRoot) -> Option<MutValue> + Send,
+{
+}
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value> + Sync,
+    S: Fn(MutRoot) -> Option<MutValue> + Sync,
+{
+}
+
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -674,7 +772,7 @@ where
     }
 
     pub fn then<SV, SubValue, MutSubValue, G2, S2>(
-        &self,
+        self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
     ) -> Kp<
         R,
@@ -683,8 +781,8 @@ where
         SubValue,
         MutRoot,
         MutSubValue,
-        impl Fn(Root) -> Option<SubValue> + use<'_, SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-        impl Fn(MutRoot) -> Option<MutSubValue> + use<'_, SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
+        impl Fn(Root) -> Option<SubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
+        impl Fn(MutRoot) -> Option<MutSubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
     >
     where
         SubValue: std::borrow::Borrow<SV>,
@@ -694,8 +792,8 @@ where
         V: 'static,
     {
         Kp::new(
-            move |root: Root| (&self.get)(root).and_then(|value| (next.get)(value)),
-            move |root: MutRoot| (&self.set)(root).and_then(|value| (next.set)(value)),
+            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
+            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
         )
     }
 
@@ -757,6 +855,38 @@ where
         crate::lock::KpThenLockKp {
             first: self,
             second: lock_kp,
+            _p: std::marker::PhantomData,
+        }
+    }
+
+    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
+    /// Enables composing futures: `kp.then_pin_future(S::fut_pin_future_kp()).then(...)` to go deeper.
+    #[cfg(feature = "pin_project")]
+    pub fn then_pin_future<Struct, Output, L>(
+        self,
+        pin_fut: L,
+    ) -> crate::pin::KpThenPinFuture<
+        R,
+        Struct,
+        Output,
+        Root,
+        MutRoot,
+        Value,
+        MutValue,
+        Self,
+        L,
+    >
+    where
+        V: 'static,
+        Struct: Unpin + 'static,
+        Output: 'static,
+        Value: std::borrow::Borrow<Struct>,
+        MutValue: std::borrow::BorrowMut<Struct>,
+        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+    {
+        crate::pin::KpThenPinFuture {
+            first: self,
+            second: pin_fut,
             _p: std::marker::PhantomData,
         }
     }
@@ -1323,7 +1453,7 @@ where
     /// Chain this keypath with another to create a composition
     /// Alias for `then` with a more descriptive name
     pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-        &self,
+        self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
     ) -> Kp<
         R,
@@ -1481,6 +1611,32 @@ where
 {
     extractor: Kp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S>,
     embedder: E,
+}
+
+// EnumKp is a functional component; Send/Sync follow from extractor and embedder.
+unsafe impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> Send
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value> + Send,
+    S: Fn(MutRoot) -> Option<MutValue> + Send,
+    E: Fn(Variant) -> Enum + Send,
+{
+}
+unsafe impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> Sync
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value> + Sync,
+    S: Fn(MutRoot) -> Option<MutValue> + Sync,
+    E: Fn(Variant) -> Enum + Sync,
+{
 }
 
 impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
@@ -2008,18 +2164,16 @@ mod tests {
         let kp = TestKP::identity();
         let kp_a = TestKP::a();
         // TestKP::a().for_arc();
-        let kp_f = TestKP::f();
-        let wres = kp_f.then(TestKP2::a()).get_mut(&mut instance).unwrap();
+        let wres = TestKP::f().then(TestKP2::a()).get_mut(&mut instance).unwrap();
         *wres = String::from("a3 changed successfully");
-        let res = kp_f.then(TestKP2::a()).get(&instance);
+        let res = TestKP::f().then(TestKP2::a()).get(&instance);
         println!("{:?}", res);
-        let res = kp_f.then(TestKP2::identity()).get(&instance);
+        let res = TestKP::f().then(TestKP2::identity()).get(&instance);
         println!("{:?}", res);
         let res = kp.get(&instance);
         println!("{:?}", res);
 
-        let hash_kp = TestKP::g(0);
-        let new_kp_from_hashmap = hash_kp.then(TestKP2::a());
+        let new_kp_from_hashmap = TestKP::g(0).then(TestKP2::a());
         println!("{:?}", new_kp_from_hashmap.get(&instance));
     }
 

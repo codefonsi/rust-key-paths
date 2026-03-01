@@ -1,6 +1,6 @@
 [package]
 name = "rust-key-paths"
-version = "2.0.0"
+version = "2.0.7"
 edition = "2024"
 authors = ["Codefonsi <info@codefonsi.com>"]
 license = "MPL-2.0"
@@ -14,19 +14,26 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
 async-trait = "0.1"
-tokio = { version = "1.38.0", features = ["sync", "rt"], optional = true }
+pin-project = { version = "1.1", optional = true }
+tokio = { version = "1.38.0", features = ["sync", "rt", "rt-multi-thread", "macros", "time"], optional = true }
 parking_lot = { version = "0.12", optional = true }
 
 [workspace]
 resolver = "3" # or "3"
 members = [
     "key-paths-derive",
+    "key-paths-iter",
 ]
+
+# Use local rust-key-paths when developing (remove or override when publishing dependents)
+[patch.crates-io]
+rust-key-paths = { path = "." }
 
 
 [features]
 default = []
 parking_lot = ["dep:parking_lot"]
+pin_project = ["dep:pin-project"]
 tagged_core = ["tagged-core/default"]
 tokio = ["dep:tokio"]
 
@@ -40,6 +47,10 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 tokio = { version = "1.38.0", features = ["sync", "rt", "rt-multi-thread", "macros"] }
 key-paths-derive = { path = "key-paths-derive" }
+key-paths-iter = { path = "key-paths-iter", features = ["rayon", "gpu"] }
+num_cpus = "1.16"
+rayon = "1.10"
+pin-project = "1.1"
 
 [[bench]]
 name = "deep_chain_leaf"
@@ -55,4 +66,28 @@ harness = false
 
 [[bench]]
 name = "deep_chain_async_only"
+harness = false
+
+[[bench]]
+name = "keypath_vs_unwrap"
+harness = false
+
+[[bench]]
+name = "ten_level_arc_rwlock"
+harness = false
+
+[[bench]]
+name = "ten_level_std_rwlock"
+harness = false
+
+[[bench]]
+name = "ten_level_tokio_rwlock"
+harness = false
+
+[[bench]]
+name = "scale_par_bench"
+harness = false
+
+[[bench]]
+name = "akp_cpu_bench"
 harness = false

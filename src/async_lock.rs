@@ -7,6 +7,7 @@
 //! - **`then`** – chain with a plain [crate::Kp]
 //! - **`then_lock`** – chain with a sync [crate::lock::LockKp]
 //! - **`then_async`** – chain with another async keypath (e.g. tokio RwLock)
+//! - **`then_pin_future`** – chain with a #[pin] Future field await ([crate::pin])
 //!
 //! Example: `root_lock.then_lock(parking_kp).then_async(async_kp).then_lock(std_lock_kp)`
 //!

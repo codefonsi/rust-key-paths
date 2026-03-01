@@ -1,8 +1,9 @@
 use key_paths_derive::Kp;
 use rust_key_paths::{KpType, LockKp};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
-use rust_key_paths::async_lock::SyncKeyPathLike;
 
 // Test collections
 #[derive(Kp)]
@@ -38,11 +39,32 @@ struct WithOptionTokioLocks {
     data: Option<Arc<tokio::sync::RwLock<i32>>>,
 }
 
+// Test Cow and Option<Cow>
+#[derive(Kp)]
+struct WithCow {
+    cow_owned: Cow<'static, String>,
+    cow_borrowed: Cow<'static, String>,
+    opt_cow: Option<Cow<'static, String>>,
+}
+
 // Test HashMap and BTreeMap _at(key)
 #[derive(Kp)]
 struct WithMaps {
     users: HashMap<String, i32>,
     cache: BTreeMap<u64, String>,
+}
+
+// Test atomic types
+#[derive(Kp)]
+struct WithAtomics {
+    counter: AtomicI32,
+    flags: AtomicU64,
+}
+
+// Test Option<Atomic>
+#[derive(Kp)]
+struct WithOptionAtomic {
+    opt_counter: Option<AtomicI32>,
 }
 
 #[test]
@@ -132,6 +154,84 @@ fn test_vecdeque_access() {
     // queue() returns container; queue_at(index) returns element at index
     let front_kp = Collections::queue_at(0);
     assert_eq!(front_kp.get(&collections), Some(&1.1));
+}
+
+#[test]
+fn test_cow_access() {
+    let data = WithCow {
+        cow_owned: Cow::Owned("owned".to_string()),
+        cow_borrowed: Cow::Owned("borrowed".to_string()),
+        opt_cow: Some(Cow::Owned("optional".to_string())),
+    };
+
+    let cow_owned_kp = WithCow::cow_owned();
+    assert_eq!(cow_owned_kp.get(&data).map(|s| s.as_str()), Some("owned"));
+
+    let cow_borrowed_kp = WithCow::cow_borrowed();
+    assert_eq!(cow_borrowed_kp.get(&data).map(|s| s.as_str()), Some("borrowed"));
+
+    let opt_cow_kp = WithCow::opt_cow();
+    assert_eq!(opt_cow_kp.get(&data).map(|s| s.as_str()), Some("optional"));
+}
+
+#[test]
+fn test_cow_mutable() {
+    let mut data = WithCow {
+        cow_owned: Cow::Owned("original".to_string()),
+        cow_borrowed: Cow::Owned("borrowed".to_string()),
+        opt_cow: Some(Cow::Owned("opt_original".to_string())),
+    };
+
+    let cow_owned_kp = WithCow::cow_owned();
+    cow_owned_kp.get_mut(&mut data).map(|s| s.make_ascii_uppercase());
+    assert_eq!(data.cow_owned.as_str(), "ORIGINAL");
+
+    let opt_cow_kp = WithCow::opt_cow();
+    opt_cow_kp.get_mut(&mut data).map(|s| s.make_ascii_uppercase());
+    assert_eq!(data.opt_cow.as_ref().map(|c| c.as_str()), Some("OPT_ORIGINAL"));
+}
+
+#[test]
+fn test_atomic_types() {
+    let mut data = WithAtomics {
+        counter: AtomicI32::new(42),
+        flags: AtomicU64::new(0xFF),
+    };
+
+    let counter_kp = WithAtomics::counter();
+    let atomic = counter_kp.get(&data).unwrap();
+    assert_eq!(atomic.load(Ordering::SeqCst), 42);
+    counter_kp.get_mut(&mut data).unwrap().store(100, Ordering::SeqCst);
+    assert_eq!(data.counter.load(Ordering::SeqCst), 100);
+
+    let flags_kp = WithAtomics::flags();
+    assert_eq!(flags_kp.get(&data).unwrap().load(Ordering::SeqCst), 0xFF);
+}
+
+#[test]
+fn test_option_atomic() {
+    let mut data = WithOptionAtomic {
+        opt_counter: Some(AtomicI32::new(10)),
+    };
+    let kp = WithOptionAtomic::opt_counter();
+    assert_eq!(kp.get(&data).unwrap().load(Ordering::SeqCst), 10);
+    kp.get_mut(&mut data).unwrap().store(20, Ordering::SeqCst);
+    assert_eq!(data.opt_counter.unwrap().load(Ordering::SeqCst), 20);
+
+    let data_none = WithOptionAtomic { opt_counter: None };
+    assert!(kp.get(&data_none).is_none());
+}
+
+#[test]
+fn test_cow_option_none() {
+    let data = WithCow {
+        cow_owned: Cow::Owned("x".to_string()),
+        cow_borrowed: Cow::Owned("y".to_string()),
+        opt_cow: None,
+    };
+
+    let opt_cow_kp = WithCow::opt_cow();
+    assert_eq!(opt_cow_kp.get(&data), None);
 }
 
 #[test]
