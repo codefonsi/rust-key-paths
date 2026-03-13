@@ -116,30 +116,39 @@ enum WrapperKind {
     PinnedBoxFuture,
 }
 
-/// Helper function to check if a type path includes std::sync module
+/// Helper function to check if a type path is exactly under std::sync (not lock_api or parking_lot).
+/// Requires the path to start with "std" then "sync" so we don't confuse with RwLock&lt;RawRwLock, T&gt; (lock_api).
 fn is_std_sync_type(path: &syn::Path) -> bool {
-    // Check for paths like std::sync::Mutex, std::sync::RwLock
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
     segments.len() >= 2
-        && segments.contains(&"std".to_string())
-        && segments.contains(&"sync".to_string())
+        && segments.get(0).map(|s| s.as_str()) == Some("std")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
 }
 
-/// Helper function to check if a type path includes tokio::sync module
+/// Helper function to check if a type path is exactly under tokio::sync.
 fn is_tokio_sync_type(path: &syn::Path) -> bool {
-    // Check for paths like tokio::sync::Mutex, tokio::sync::RwLock
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
     segments.len() >= 2
-        && segments.contains(&"tokio".to_string())
-        && segments.contains(&"sync".to_string())
+        && segments.get(0).map(|s| s.as_str()) == Some("tokio")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
 }
 
-/// Helper function to check if a type path includes std::sync::atomic module
+/// Helper function to check if a type path is under parking_lot (RwLock/Mutex from lock_api).
+/// Use so we never treat parking_lot::RwLock as std::sync::RwLock.
+fn is_parking_lot_type(path: &syn::Path) -> bool {
+    path.segments
+        .first()
+        .map(|s| s.ident == "parking_lot")
+        == Some(true)
+}
+
+/// Helper function to check if a type path is under std::sync::atomic (strict prefix).
 fn is_std_sync_atomic_type(path: &syn::Path) -> bool {
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
-    segments.contains(&"std".to_string())
-        && segments.contains(&"sync".to_string())
-        && segments.contains(&"atomic".to_string())
+    segments.len() >= 3
+        && segments.get(0).map(|s| s.as_str()) == Some("std")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
+        && segments.get(2).map(|s| s.as_str()) == Some("atomic")
 }
 
 /// Atomic type idents (no type params): AtomicBool, AtomicI8, etc.
@@ -386,21 +395,28 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                                     "LinkedList" => (WrapperKind::LinkedList, Some(inner.clone())),
                                     "BinaryHeap" => (WrapperKind::BinaryHeap, Some(inner.clone())),
                                     "Result" => (WrapperKind::Result, Some(inner.clone())),
-                                    // For std::sync::Mutex and std::sync::RwLock, use Std variants
+                                    // Explicit parking_lot path (lock_api::RwLock) — never treat as std
+                                    "Mutex" if is_parking_lot_type(&tp.path) => {
+                                        (WrapperKind::Mutex, Some(inner.clone()))
+                                    }
+                                    "RwLock" if is_parking_lot_type(&tp.path) => {
+                                        (WrapperKind::RwLock, Some(inner.clone()))
+                                    }
+                                    // std::sync::Mutex and std::sync::RwLock only when path starts with std::sync
                                     "Mutex" if is_std_sync => {
                                         (WrapperKind::StdMutex, Some(inner.clone()))
                                     }
                                     "RwLock" if is_std_sync => {
                                         (WrapperKind::StdRwLock, Some(inner.clone()))
                                     }
-                                    // For tokio::sync::Mutex and tokio::sync::RwLock, use Tokio variants
+                                    // tokio::sync::Mutex and tokio::sync::RwLock
                                     "Mutex" if is_tokio_sync => {
                                         (WrapperKind::TokioMutex, Some(inner.clone()))
                                     }
                                     "RwLock" if is_tokio_sync => {
                                         (WrapperKind::TokioRwLock, Some(inner.clone()))
                                     }
-                                    // Default: parking_lot (no std::sync or tokio::sync prefix)
+                                    // Default: parking_lot (bare Mutex/RwLock or unknown path)
                                     "Mutex" => (WrapperKind::Mutex, Some(inner.clone())),
                                     "RwLock" => (WrapperKind::RwLock, Some(inner.clone())),
                                     "Weak" => (WrapperKind::Weak, Some(inner.clone())),

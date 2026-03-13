@@ -1,8 +1,8 @@
 use std::cell::{RefCell, RefMut};
 use std::rc::Rc;
 use std::sync::Arc;
+use parking_lot::{Mutex, RwLock};
 use key_paths_derive::Kp;
-use rust_key_paths::KpVoid;
 
 #[derive(Debug, Kp)]
 struct SomeComplexStruct {
@@ -12,6 +12,22 @@ struct SomeComplexStruct {
     scfs3: Arc<std::sync::RwLock<SomeOtherStruct>>,
     // scfs4: Arc<RefMut<SomeOtherStruct>>,
     // scfs5: Option<RefCell<SomeOtherStruct>>,
+    scfs6: Option<std::sync::Mutex<SomeOtherStruct>>,
+    scfs7: Option<std::sync::RwLock<SomeOtherStruct>>,
+    scfs8: Option<Mutex<SomeOtherStruct>>,
+    scfs9: Option<RwLock<SomeOtherStruct>>,
+    
+    scfs10: std::sync::Mutex<Option<SomeOtherStruct>>,
+    scfs11: std::sync::RwLock<Option<SomeOtherStruct>>,
+    scfs12: Mutex<Option<SomeOtherStruct>>,
+    scfs913: RwLock<Option<SomeOtherStruct>>,
+
+    scfs14: Option<std::sync::Mutex<Option<SomeOtherStruct>>>,
+    scfs15: Option<std::sync::RwLock<Option<SomeOtherStruct>>>,
+    scfs16: Option<Mutex<Option<SomeOtherStruct>>>,
+    scfs17: Option<RwLock<Option<SomeOtherStruct>>>,
+
+
 }
 
 #[derive(Debug, Kp)]
