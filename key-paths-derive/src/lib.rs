@@ -68,11 +68,15 @@ enum WrapperKind {
     // Arc with synchronization primitives (default)
     StdArcMutex,
     StdArcRwLock,
+    StdArcMutexOption,
+    StdArcRwLockOption,
     OptionStdArcMutex,
     OptionStdArcRwLock,
     // Synchronization primitives default
     StdMutex,
     StdRwLock,
+    StdMutexOption,
+    StdRwLockOption,
     OptionStdMutex,
     OptionStdRwLock,
     // Synchronization primitives (parking_lot)
@@ -86,8 +90,12 @@ enum WrapperKind {
     // parking_lot
     ArcMutex,
     ArcRwLock,
+    ArcMutexOption,
+    ArcRwLockOption,
     OptionArcMutex,
     OptionArcRwLock,
+    MutexOption,
+    RwLockOption,
     // Arc with synchronization primitives (tokio::sync - requires tokio feature)
     TokioArcMutex,
     TokioArcRwLock,
@@ -357,6 +365,19 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                                 return (WrapperKind::HashMapOption, inner_inner);
                             }
                             // BTreeMapOption is handled in the map block (HashMap/BTreeMap)
+                            // Mutex<Option<T>> / RwLock<Option<T>> (yields LockKp value T)
+                            ("Mutex", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
+                                return (WrapperKind::StdMutexOption, inner_inner);
+                            }
+                            ("RwLock", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
+                                return (WrapperKind::StdRwLockOption, inner_inner);
+                            }
+                            ("Mutex", WrapperKind::Option) if is_parking_lot_type(&tp.path) => {
+                                return (WrapperKind::MutexOption, inner_inner);
+                            }
+                            ("RwLock", WrapperKind::Option) if is_parking_lot_type(&tp.path) => {
+                                return (WrapperKind::RwLockOption, inner_inner);
+                            }
                             // std::sync variants (when inner is StdMutex/StdRwLock)
                             ("Arc", WrapperKind::StdMutex) => {
                                 return (WrapperKind::StdArcMutex, inner_inner);
@@ -364,12 +385,24 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                             ("Arc", WrapperKind::StdRwLock) => {
                                 return (WrapperKind::StdArcRwLock, inner_inner);
                             }
+                            ("Arc", WrapperKind::StdMutexOption) => {
+                                return (WrapperKind::StdArcMutexOption, inner_inner);
+                            }
+                            ("Arc", WrapperKind::StdRwLockOption) => {
+                                return (WrapperKind::StdArcRwLockOption, inner_inner);
+                            }
                             // parking_lot variants (default - when inner is Mutex/RwLock without std::sync prefix)
                             ("Arc", WrapperKind::Mutex) => {
                                 return (WrapperKind::ArcMutex, inner_inner);
                             }
                             ("Arc", WrapperKind::RwLock) => {
                                 return (WrapperKind::ArcRwLock, inner_inner);
+                            }
+                            ("Arc", WrapperKind::MutexOption) => {
+                                return (WrapperKind::ArcMutexOption, inner_inner);
+                            }
+                            ("Arc", WrapperKind::RwLockOption) => {
+                                return (WrapperKind::ArcRwLockOption, inner_inner);
                             }
                             // tokio::sync variants (when inner is TokioMutex/TokioRwLock)
                             ("Arc", WrapperKind::TokioMutex) => {
@@ -1234,6 +1267,58 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
+                        (WrapperKind::StdArcMutexOption, Some(inner_ty)) => {
+                            // For Arc<std::sync::Mutex<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcMutexOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ArcMutexAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::StdArcRwLockOption, Some(inner_ty)) => {
+                            // For Arc<std::sync::RwLock<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcRwLockOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ArcRwLockAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
                         (WrapperKind::ArcRwLock, Some(inner_ty)) => {
                             // For Arc<parking_lot::RwLock<T>> (requires rust-key-paths "parking_lot" feature)
                             let kp_lock_fn = format_ident!("{}_kp", field_ident);
@@ -1281,6 +1366,58 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         rust_key_paths::Kp::new(
                                             |v: &#inner_ty| Some(v),
                                             |v: &mut #inner_ty| Some(v),
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcMutexOption, Some(inner_ty)) => {
+                            // For Arc<parking_lot::Mutex<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotMutexOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ParkingLotMutexAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcRwLockOption, Some(inner_ty)) => {
+                            // For Arc<parking_lot::RwLock<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ParkingLotRwLockAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
                                         ),
                                     )
                                 }
@@ -3083,6 +3220,94 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 ),
                                                 rust_key_paths::lock::ParkingLotMutexAccess::new(),
                                                 rust_key_paths::Kp::new(|v: &#inner_ty| Some(v), |v: &mut #inner_ty| Some(v)),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::StdArcMutexOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpArcMutexOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ArcMutexAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::StdArcRwLockOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpArcRwLockOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ArcRwLockAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::ArcMutexOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpParkingLotMutexOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ParkingLotMutexAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::ArcRwLockOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpParkingLotRwLockOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ParkingLotRwLockAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
                                             )
                                         }
                                     });

@@ -1413,6 +1413,27 @@ pub type LockKpArcMutexFor<Root, Lock, Inner> = LockKp<
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
 >;
 
+/// Type alias for LockKp over Arc<std::sync::Mutex<Option<T>>>; value is T (extract from Option).
+pub type LockKpArcMutexOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ArcMutexAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
+>;
+
 /// Type alias for LockKp over Arc<std::sync::RwLock<T>>. Use with derive macro's `_lock()` methods.
 pub type LockKpArcRwLockFor<Root, Lock, Inner> = LockKp<
     Root,
@@ -1432,6 +1453,27 @@ pub type LockKpArcRwLockFor<Root, Lock, Inner> = LockKp<
     ArcRwLockAccess<Inner>,
     for<'b> fn(&'b Inner) -> Option<&'b Inner>,
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
+>;
+
+/// Type alias for LockKp over Arc<std::sync::RwLock<Option<T>>>; value is T (extract from Option).
+pub type LockKpArcRwLockOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ArcRwLockAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
 >;
 
 #[cfg(feature = "parking_lot")]
@@ -1457,6 +1499,28 @@ pub type LockKpParkingLotMutexFor<Root, Lock, Inner> = LockKp<
 >;
 
 #[cfg(feature = "parking_lot")]
+/// Type alias for LockKp over Arc<parking_lot::Mutex<Option<T>>>; value is T (extract from Option).
+pub type LockKpParkingLotMutexOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ParkingLotMutexAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
+>;
+
+#[cfg(feature = "parking_lot")]
 /// Type alias for LockKp over Arc<parking_lot::RwLock<T>>. Use with derive macro's `_lock()` methods.
 pub type LockKpParkingLotRwLockFor<Root, Lock, Inner> = LockKp<
     Root,
@@ -1476,6 +1540,28 @@ pub type LockKpParkingLotRwLockFor<Root, Lock, Inner> = LockKp<
     ParkingLotRwLockAccess<Inner>,
     for<'b> fn(&'b Inner) -> Option<&'b Inner>,
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
+>;
+
+#[cfg(feature = "parking_lot")]
+/// Type alias for LockKp over Arc<parking_lot::RwLock<Option<T>>>; value is T (extract from Option).
+pub type LockKpParkingLotRwLockOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ParkingLotRwLockAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
 >;
 
 /// Type alias for common LockKp usage with Arc<Mutex<T>>
