@@ -27,6 +27,18 @@ struct SomeComplexStruct {
     scfs16: Option<Mutex<Option<SomeOtherStruct>>>,
     scfs17: Option<RwLock<Option<SomeOtherStruct>>>,
 
+    // Locks inside Arc (LockKp: root SomeComplexStruct, value SomeOtherStruct)
+    scfs_arc_pl_m: Arc<Mutex<SomeOtherStruct>>,
+    scfs_arc_pl_rw: Arc<RwLock<SomeOtherStruct>>,
+    scfs_arc_std_mo: Arc<std::sync::Mutex<Option<SomeOtherStruct>>>,
+    scfs_arc_std_rwo: Arc<std::sync::RwLock<Option<SomeOtherStruct>>>,
+    scfs_arc_pl_mo: Arc<Mutex<Option<SomeOtherStruct>>>,
+    scfs_arc_pl_rwo: Arc<RwLock<Option<SomeOtherStruct>>>,
+    scfs_o_arc_std_m: Option<Arc<std::sync::Mutex<SomeOtherStruct>>>,
+    scfs_o_arc_std_rw: Option<Arc<std::sync::RwLock<SomeOtherStruct>>>,
+    scfs_o_arc_pl_m: Option<Arc<Mutex<SomeOtherStruct>>>,
+    scfs_o_arc_pl_rw: Option<Arc<RwLock<SomeOtherStruct>>>,
+
     // Tokio: Option<Arc<tokio::sync::Mutex/RwLock<T>>> — produce AsyncLockKp (root SomeComplexStruct, value SomeOtherStruct)
     #[cfg(feature = "tokio")]
     scfs_t2: Option<Arc<tokio::sync::Mutex<SomeOtherStruct>>>,
@@ -102,8 +114,7 @@ fn main() {
         .get_mut(&mut instance).map(|x| {
         *x = String::from("🖖🏿🖖🏿🖖🏿🖖🏿");
     });
-
-
+    
 
     // if let Some(omsf) = SomeComplexStruct::scfs2_lock()
     //     .then(SomeOtherStruct::sosf())

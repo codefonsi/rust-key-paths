@@ -1449,7 +1449,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
