@@ -20,28 +20,34 @@ struct SomeComplexStruct {
     scfs10: std::sync::Mutex<Option<SomeOtherStruct>>,
     scfs11: std::sync::RwLock<Option<SomeOtherStruct>>,
     scfs12: Mutex<Option<SomeOtherStruct>>,
-    scfs913: RwLock<Option<SomeOtherStruct>>,
+    scfs13: RwLock<Option<SomeOtherStruct>>,
 
     scfs14: Option<std::sync::Mutex<Option<SomeOtherStruct>>>,
     scfs15: Option<std::sync::RwLock<Option<SomeOtherStruct>>>,
     scfs16: Option<Mutex<Option<SomeOtherStruct>>>,
     scfs17: Option<RwLock<Option<SomeOtherStruct>>>,
 
-
+    // Tokio: Option<Arc<tokio::sync::Mutex/RwLock<T>>> — produce AsyncLockKp (root SomeComplexStruct, value SomeOtherStruct)
+    #[cfg(feature = "tokio")]
+    scfs_t2: Option<Arc<tokio::sync::Mutex<SomeOtherStruct>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t3: Option<Arc<tokio::sync::RwLock<SomeOtherStruct>>>,
 }
 
 #[derive(Debug, Kp)]
+#[derive(Clone)]
 struct SomeOtherStruct {
     sosf: Box<Option<OneMoreStruct>>,
 }
 
-#[derive(Debug, Kp)]
+#[derive(Debug, Clone, Kp)]
 enum SomeEnum {
     A(String),
     B(Option<Arc<DarkStruct>>),
 }
 
 #[derive(Debug, Kp)]
+#[derive(Clone)]
 struct OneMoreStruct {
     omsf: Option<String>,
     omse: Option<SomeEnum>,
