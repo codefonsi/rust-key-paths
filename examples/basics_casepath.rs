@@ -127,7 +127,14 @@ fn main() {
         *x = String::from("🖖🏿🖖🏿🖖🏿🖖🏿");
     });
     
-
+    // LockKp for Arc<parking_lot::RwLock<Option<SomeOtherStruct>>> should yield value SomeOtherStruct
+    let x_pl_rw: Option<&SomeOtherStruct> = SomeComplexStruct::scfs_arc_pl_rwo().get(todo!());
+    // Same for Arc<std::sync::Mutex<Option<SomeOtherStruct>>>
+    let x_std_m: Option<&SomeOtherStruct> = SomeComplexStruct::scfs_arc_std_mo().get(todo!());
+    // And Arc<std::sync::RwLock<Option<SomeOtherStruct>>>
+    let x_std_rw: Option<&SomeOtherStruct> = SomeComplexStruct::scfs_arc_std_rwo().get(todo!());
+    // And Arc<parking_lot::Mutex<Option<SomeOtherStruct>>>
+    let x_pl_m: Option<&SomeOtherStruct> = SomeComplexStruct::scfs_arc_pl_mo().get(todo!());
     // if let Some(omsf) = SomeComplexStruct::scfs2_lock()
     //     .then(SomeOtherStruct::sosf())
     //     .then(OneMoreStruct::omse())

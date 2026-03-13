@@ -366,16 +366,18 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                             }
                             // BTreeMapOption is handled in the map block (HashMap/BTreeMap)
                             // Mutex<Option<T>> / RwLock<Option<T>> (yields LockKp value T)
+                            // std::sync::Mutex<Option<T>> / RwLock<Option<T>>
                             ("Mutex", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
                                 return (WrapperKind::StdMutexOption, inner_inner);
                             }
                             ("RwLock", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
                                 return (WrapperKind::StdRwLockOption, inner_inner);
                             }
-                            ("Mutex", WrapperKind::Option) if is_parking_lot_type(&tp.path) => {
+                            // parking_lot::Mutex<Option<T>> / RwLock<Option<T>>, and bare Mutex/RwLock assumed parking_lot
+                            ("Mutex", WrapperKind::Option) => {
                                 return (WrapperKind::MutexOption, inner_inner);
                             }
-                            ("RwLock", WrapperKind::Option) if is_parking_lot_type(&tp.path) => {
+                            ("RwLock", WrapperKind::Option) => {
                                 return (WrapperKind::RwLockOption, inner_inner);
                             }
                             // std::sync variants (when inner is StdMutex/StdRwLock)
