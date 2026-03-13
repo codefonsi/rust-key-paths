@@ -4,6 +4,8 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock};
 use key_paths_derive::Kp;
 
+// cargo check --example basics_casepath --features parking_lot
+// cargo run --example basics_casepath --features parking_lot
 #[derive(Debug, Kp)]
 struct SomeComplexStruct {
     scsf: Option<Box<SomeOtherStruct>>,
