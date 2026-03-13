@@ -39,11 +39,23 @@ struct SomeComplexStruct {
     scfs_o_arc_pl_m: Option<Arc<Mutex<SomeOtherStruct>>>,
     scfs_o_arc_pl_rw: Option<Arc<RwLock<SomeOtherStruct>>>,
 
-    // Tokio: Option<Arc<tokio::sync::Mutex/RwLock<T>>> — produce AsyncLockKp (root SomeComplexStruct, value SomeOtherStruct)
+    // Tokio: same combinations as above — produce AsyncLockKp (root SomeComplexStruct, value SomeOtherStruct or Option<SomeOtherStruct>)
     #[cfg(feature = "tokio")]
-    scfs_t2: Option<Arc<tokio::sync::Mutex<SomeOtherStruct>>>,
+    scfs_t_arc_m: Arc<tokio::sync::Mutex<SomeOtherStruct>>,
     #[cfg(feature = "tokio")]
-    scfs_t3: Option<Arc<tokio::sync::RwLock<SomeOtherStruct>>>,
+    scfs_t_arc_rw: Arc<tokio::sync::RwLock<SomeOtherStruct>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_arc_mo: Arc<tokio::sync::Mutex<Option<SomeOtherStruct>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_arc_rwo: Arc<tokio::sync::RwLock<Option<SomeOtherStruct>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_o_arc_m: Option<Arc<tokio::sync::Mutex<SomeOtherStruct>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_o_arc_rw: Option<Arc<tokio::sync::RwLock<SomeOtherStruct>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_o_arc_mo: Option<Arc<tokio::sync::Mutex<Option<SomeOtherStruct>>>>,
+    #[cfg(feature = "tokio")]
+    scfs_t_o_arc_rwo: Option<Arc<tokio::sync::RwLock<Option<SomeOtherStruct>>>>,
 }
 
 #[derive(Debug, Kp)]
