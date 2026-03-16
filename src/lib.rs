@@ -1868,6 +1868,212 @@ where
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ExtensionTrait — set/modify/update and optional/or_else HOFs
+// get/get_mut and then/then_lock/then_async remain inherent on Kp only.
+// ══════════════════════════════════════════════════════════════════════════
+
+use std::borrow::{Borrow, BorrowMut};
+
+/// Accessor used by [ExtensionTrait] default impls. Implement for keypath-like types to get extension methods.
+pub trait KpExtensionAccess<Root, Value, MutRoot, MutValue> {
+    fn get_ext(&self, root: Root) -> Option<Value>;
+    fn get_mut_ext(&self, root: MutRoot) -> Option<MutValue>;
+}
+
+/// Extension methods for keypaths: set, replace, modify, update, and optional/or_else helpers.
+///
+/// [Kp::get] and [Kp::get_mut] remain the primary read/write API; chaining methods
+/// ([Kp::then], [Kp::then_lock], [Kp::then_async], etc.) are unchanged.
+pub trait ExtensionTrait<R, V, Root, Value, MutRoot, MutValue>:
+    KpExtensionAccess<Root, Value, MutRoot, MutValue>
+where
+    MutValue: BorrowMut<V>,
+{
+    // ─── KpSet-style ─────────────────────────────────────────────────────
+    fn set(&self, root: MutRoot, value: V) -> bool
+    where
+        V: Clone,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            *field.borrow_mut() = value;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn replace(&self, root: MutRoot, value: V) -> Option<V>
+    where
+        V: Clone,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            let old = field.borrow().clone();
+            *field.borrow_mut() = value;
+            Some(old)
+        } else {
+            None
+        }
+    }
+
+    fn set_or_else<F>(&self, root: MutRoot, value: V, on_failure: F) -> bool
+    where
+        V: Clone,
+        F: FnOnce(),
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            *field.borrow_mut() = value;
+            true
+        } else {
+            on_failure();
+            false
+        }
+    }
+
+    fn try_set(&self, root: MutRoot, value: V) -> Result<(), &'static str>
+    where
+        V: Clone,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            *field.borrow_mut() = value;
+            Ok(())
+        } else {
+            Err("Keypath does not exist or cannot be accessed")
+        }
+    }
+
+    // ─── KpModify-style ──────────────────────────────────────────────────
+    fn modify<F>(&self, root: MutRoot, f: F) -> bool
+    where
+        F: FnOnce(&mut V),
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            f(field.borrow_mut());
+            true
+        } else {
+            false
+        }
+    }
+
+    fn try_modify<F, E>(&self, root: MutRoot, f: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut V) -> Result<(), E>,
+        E: From<&'static str>,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            f(field.borrow_mut())
+        } else {
+            Err(E::from("Keypath does not exist or cannot be accessed"))
+        }
+    }
+
+    // ─── KpUpdate-style ──────────────────────────────────────────────────
+    fn update<F>(&self, root: MutRoot, f: F) -> bool
+    where
+        V: Clone,
+        MutValue: Borrow<V>,
+        F: FnOnce(&V) -> V,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            let new_value = f(field.borrow());
+            *field.borrow_mut() = new_value;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn update_or<F>(&self, root: MutRoot, f: F, default: V) -> V
+    where
+        V: Clone,
+        MutValue: Borrow<V>,
+        F: FnOnce(&V) -> V,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            let new_value = f(field.borrow());
+            *field.borrow_mut() = new_value.clone();
+            new_value
+        } else {
+            default
+        }
+    }
+
+    fn try_update<F, E>(&self, root: MutRoot, f: F) -> Result<(), E>
+    where
+        V: Clone,
+        MutValue: Borrow<V>,
+        F: FnOnce(&V) -> Result<V, E>,
+        E: From<&'static str>,
+    {
+        if let Some(mut field) = self.get_mut_ext(root) {
+            match f(field.borrow()) {
+                Ok(new_value) => {
+                    *field.borrow_mut() = new_value;
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(E::from("Keypath does not exist or cannot be accessed"))
+        }
+    }
+
+    // ─── Optional / or_else HOFs ─────────────────────────────────────────
+    fn get_optional(&self, root: Root) -> Option<Value> {
+        self.get_ext(root)
+    }
+
+    fn get_mut_optional(&self, root: MutRoot) -> Option<MutValue> {
+        self.get_mut_ext(root)
+    }
+
+    fn get_or_else<D>(&self, root: Root, default: D) -> Value
+    where
+        D: FnOnce() -> Value,
+    {
+        self.get_ext(root).unwrap_or_else(default)
+    }
+
+    fn get_mut_or_else<D>(&self, root: MutRoot, default: D) -> MutValue
+    where
+        D: FnOnce() -> MutValue,
+    {
+        self.get_mut_ext(root).unwrap_or_else(default)
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpExtensionAccess<Root, Value, MutRoot, MutValue>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    #[inline]
+    fn get_ext(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+    #[inline]
+    fn get_mut_ext(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> ExtensionTrait<R, V, Root, Value, MutRoot, MutValue>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V> + std::borrow::Borrow<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
 ///
