@@ -1047,31 +1047,6 @@ where
         )
     }
 
-    /// Chain this keypath with another to create a composition
-    /// Alias for `then` with a more descriptive name
-    pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        self.then(next)
-    }
-
     pub fn for_arc<'b>(
         &self,
     ) -> Kp<
@@ -2724,6 +2699,122 @@ mod tests {
         );
     }
 
+    // ─── KpTrait: enforce use of Kp in APIs ─────────────────────────────────
+
+    /// Helper that only accepts a keypath (enforced via KpTrait). Callers must pass a Kp, not raw closures.
+    fn require_kp<R, V, K>(_kp: &K) -> std::any::TypeId
+    where
+        K: KpTrait<R, V>,
+        R: 'static,
+        V: 'static,
+    {
+        K::type_id_root()
+    }
+
+    #[test]
+    fn test_kp_trait_enforce_fn_takes_kp() {
+        use std::any::TypeId;
+
+        struct AppState {
+            count: i32,
+        }
+        let count_kp = KpType::new(
+            |s: &AppState| Some(&s.count),
+            |s: &mut AppState| Some(&mut s.count),
+        );
+        // Only keypath types implement KpTrait; this fn enforces that callers pass a Kp
+        let root_id = require_kp::<AppState, i32, _>(&count_kp);
+        assert_eq!(root_id, TypeId::of::<AppState>());
+        assert_eq!(
+            <KpType<'static, AppState, i32>>::type_id_root(),
+            TypeId::of::<AppState>()
+        );
+        assert_eq!(<KpType<'static, AppState, i32>>::type_id_value(), TypeId::of::<i32>());
+    }
+
+    #[test]
+    fn test_kp_trait_enforce_struct_holds_kp() {
+        use std::any::TypeId;
+
+        struct User {
+            name: String,
+        }
+        /// Config that must use a keypath to specify which field to use (enforced by KpTrait).
+        struct FieldAccessor<R, V, K>
+        where
+            K: KpTrait<R, V>,
+        {
+            _kp: std::marker::PhantomData<K>,
+            _root: std::marker::PhantomData<R>,
+            _value: std::marker::PhantomData<V>,
+        }
+        impl<R, V, K> FieldAccessor<R, V, K>
+        where
+            K: KpTrait<R, V>,
+            R: 'static,
+            V: 'static,
+        {
+            fn root_type_id(&self) -> TypeId {
+                K::type_id_root()
+            }
+            fn value_type_id(&self) -> TypeId {
+                K::type_id_value()
+            }
+        }
+        type NameAccessor = FieldAccessor<User, String, KpType<'static, User, String>>;
+        let acc = NameAccessor {
+            _kp: std::marker::PhantomData,
+            _root: std::marker::PhantomData,
+            _value: std::marker::PhantomData,
+        };
+        assert_eq!(acc.root_type_id(), TypeId::of::<User>());
+        assert_eq!(acc.value_type_id(), TypeId::of::<String>());
+    }
+
+    #[test]
+    fn test_kp_trait_enforce_type_id_at_runtime() {
+        use std::any::TypeId;
+
+        /// Registry that only accepts keypaths (KpTrait) and uses TypeId for dispatch.
+        fn register_kp_root_type_id<R, V, K>(_kp: &K) -> TypeId
+        where
+            K: KpTrait<R, V>,
+            R: 'static,
+            V: 'static,
+        {
+            K::type_id_root()
+        }
+
+        struct Model {
+            id: u64,
+        }
+        let id_kp = KpType::new(
+            |m: &Model| Some(&m.id),
+            |m: &mut Model| Some(&mut m.id),
+        );
+        let root_id = register_kp_root_type_id(&id_kp);
+        assert_eq!(root_id, TypeId::of::<Model>());
+    }
+
+    #[test]
+    fn test_kp_trait_different_kps_same_root_different_values() {
+        use std::any::TypeId;
+
+        struct Root {
+            a: i32,
+            b: String,
+        }
+        let kp_a = KpType::new(|r: &Root| Some(&r.a), |r: &mut Root| Some(&mut r.a));
+        let kp_b = KpType::new(|r: &Root| Some(&r.b), |r: &mut Root| Some(&mut r.b));
+        // Same root, different value types
+        assert_eq!(<KpType<'static, Root, i32>>::type_id_root(), TypeId::of::<Root>());
+        assert_eq!(<KpType<'static, Root, String>>::type_id_root(), TypeId::of::<Root>());
+        assert_eq!(<KpType<'static, Root, i32>>::type_id_value(), TypeId::of::<i32>());
+        assert_eq!(<KpType<'static, Root, String>>::type_id_value(), TypeId::of::<String>());
+        let _ = kp_a;
+        let _ = kp_b;
+    }
+
     #[test]
     fn test_a() {
         let instance2 = TestKP2::new();
@@ -3785,9 +3876,9 @@ mod tests {
             |s: &mut Settings| Some(&mut s.theme),
         );
 
-        // Chain all together - store intermediate result
-        let profile_settings = profile_kp.chain(settings_kp);
-        let theme_path = profile_settings.chain(theme_kp);
+        // Chain all together with .then() - store intermediate result
+        let profile_settings = profile_kp.then(settings_kp);
+        let theme_path = profile_settings.then(theme_kp);
         assert_eq!(theme_path.get(&user), Some(&"dark".to_string()));
     }
 
