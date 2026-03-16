@@ -998,30 +998,30 @@ where
         )
     }
 
-    /// Chain this keypath with another to create a composition
-    /// Alias for `then` with a more descriptive name
-    pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        self.then(next)
-    }
+    // /// Chain this keypath with another to create a composition
+    // /// Alias for `then` with a more descriptive name
+    // pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
+    //     self,
+    //     next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    // ) -> Kp<
+    //     R,
+    //     SV,
+    //     Root,
+    //     SubValue,
+    //     MutRoot,
+    //     MutSubValue,
+    //     impl Fn(Root) -> Option<SubValue>,
+    //     impl Fn(MutRoot) -> Option<MutSubValue>,
+    // >
+    // where
+    //     SubValue: std::borrow::Borrow<SV>,
+    //     MutSubValue: std::borrow::BorrowMut<SV>,
+    //     G2: Fn(Value) -> Option<SubValue>,
+    //     S2: Fn(MutValue) -> Option<MutSubValue>,
+    //     V: 'static,
+    // {
+    //     self.then(next)
+    // }
 
     pub fn for_arc<'b>(
         &self,
