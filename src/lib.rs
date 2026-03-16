@@ -90,6 +90,44 @@ impl<T> KeyPathValueTarget for &mut T {
     type Target = T;
 }
 
+/// Marker trait for keypaths: type-level Root/Value and [TypeId](std::any::TypeId) support.
+///
+/// Implemented for [Kp] so that generic code can require `KpTrait<Root, Value>` and use
+/// [type_id_root](KpTrait::type_id_root) / [type_id_value](KpTrait::type_id_value) for runtime type identification.
+pub trait KpTrait<Root, Value> {
+    /// Returns the root type this keypath operates on.
+    ///
+    /// This is a marker method for type-level programming. It should not be called at runtime.
+    #[doc(hidden)]
+    fn __marker_root() -> std::marker::PhantomData<Root> {
+        std::marker::PhantomData
+    }
+
+    /// Returns the value type this keypath accesses.
+    ///
+    /// This is a marker method for type-level programming. It should not be called at runtime.
+    #[doc(hidden)]
+    fn __marker_value() -> std::marker::PhantomData<Value> {
+        std::marker::PhantomData
+    }
+
+    /// Returns the [TypeId](std::any::TypeId) of the root type. Requires `Root: 'static`.
+    fn type_id_root() -> std::any::TypeId
+    where
+        Root: 'static,
+    {
+        std::any::TypeId::of::<Root>()
+    }
+
+    /// Returns the [TypeId](std::any::TypeId) of the value type. Requires `Value: 'static`.
+    fn type_id_value() -> std::any::TypeId
+    where
+        Value: 'static,
+    {
+        std::any::TypeId::of::<Value>()
+    }
+}
+
 /// Build a keypath from `Type.field` segments. Use with types that have keypath accessors (e.g. `#[derive(Kp)]` from key-paths-derive).
 #[macro_export]
 macro_rules! keypath {
@@ -937,6 +975,17 @@ where
 {
 }
 
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V> for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -998,30 +1047,30 @@ where
         )
     }
 
-    // /// Chain this keypath with another to create a composition
-    // /// Alias for `then` with a more descriptive name
-    // pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-    //     self,
-    //     next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    // ) -> Kp<
-    //     R,
-    //     SV,
-    //     Root,
-    //     SubValue,
-    //     MutRoot,
-    //     MutSubValue,
-    //     impl Fn(Root) -> Option<SubValue>,
-    //     impl Fn(MutRoot) -> Option<MutSubValue>,
-    // >
-    // where
-    //     SubValue: std::borrow::Borrow<SV>,
-    //     MutSubValue: std::borrow::BorrowMut<SV>,
-    //     G2: Fn(Value) -> Option<SubValue>,
-    //     S2: Fn(MutValue) -> Option<MutSubValue>,
-    //     V: 'static,
-    // {
-    //     self.then(next)
-    // }
+    /// Chain this keypath with another to create a composition
+    /// Alias for `then` with a more descriptive name
+    pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static,
+    {
+        self.then(next)
+    }
 
     pub fn for_arc<'b>(
         &self,
@@ -2640,6 +2689,41 @@ mod tests {
     impl TestKP3 {}
 
     impl TestKP {}
+    #[test]
+    fn test_kp_trait_type_id() {
+        use std::any::TypeId;
+
+        struct RootType;
+        struct ValueType;
+
+        // KpType<'a, R, V> = Kp<R, V, ...>, so KpTrait<R, V> is implemented for Kp
+        type TestKpType = KpType<'static, RootType, ValueType>;
+        assert_eq!(
+            TestKpType::type_id_root(),
+            TypeId::of::<RootType>(),
+            "type_id_root should match TypeId::of::<Root>()"
+        );
+        assert_eq!(
+            TestKpType::type_id_value(),
+            TypeId::of::<ValueType>(),
+            "type_id_value should match TypeId::of::<Value>()"
+        );
+
+        // Concrete keypath: KpType<Foo, i32> -> KpTrait<Foo, i32>
+        struct Foo {
+            x: i32,
+        }
+        let _kp = KpType::new(|f: &Foo| Some(&f.x), |f: &mut Foo| Some(&mut f.x));
+        assert_eq!(
+            <KpType<'static, Foo, i32> as KpTrait<Foo, i32>>::type_id_root(),
+            TypeId::of::<Foo>()
+        );
+        assert_eq!(
+            <KpType<'static, Foo, i32> as KpTrait<Foo, i32>>::type_id_value(),
+            TypeId::of::<i32>()
+        );
+    }
+
     #[test]
     fn test_a() {
         let instance2 = TestKP2::new();
