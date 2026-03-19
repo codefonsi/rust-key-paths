@@ -1906,6 +1906,16 @@ where
         }
     }
 
+    #[inline]
+    pub fn get(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+
+    #[inline]
+    pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
+
 }
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
@@ -2353,9 +2363,9 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn kp_adaptable<T>(kp: T)
+    fn kp_adaptable<T, Root, Value, MutRoot, MutValue, G, S>(kp: T)
     where
-        T: KpTrait<TestKP, String>,
+        T: KpTrait<TestKP, String, Root, Value, MutRoot, MutValue, G, S>,
     {
         // kp.get
         // .get_mut
