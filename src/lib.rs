@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 
 // Export the lock module
 pub mod lock;
+pub mod prelude;
 pub use lock::{
     ArcMutexAccess, ArcRwLockAccess, LockAccess, LockKp, LockKpType, RcRefCellAccess,
     StdMutexAccess, StdRwLockAccess,
@@ -886,23 +887,30 @@ where
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
-trait KpTrait<Root, Value> {
+pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     fn type_id_of_root() -> TypeId
     where
-        Root: 'static,
+        R: 'static,
     {
-        std::any::TypeId::of::<Root>()
+        std::any::TypeId::of::<R>()
     }
 
     fn type_id_of_value() -> TypeId
     where
-        Value: 'static,
+        V: 'static,
     {
-        std::any::TypeId::of::<Value>()
+        std::any::TypeId::of::<V>()
     }
+    
+    #[inline]
+    fn get(&self, root: Root) -> Option<Value>;
+
+    #[inline]
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
+
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V>
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -911,6 +919,13 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
+    fn get(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
 }
 
 /// AKp (AnyKeyPath) - Hides both Root and Value types
@@ -985,15 +1000,6 @@ where
             set: set,
             _p: std::marker::PhantomData,
         }
-    }
-
-    #[inline]
-    pub fn get(&self, root: Root) -> Option<Value> {
-        (self.get)(root)
-    }
-    #[inline]
-    pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
-        (self.set)(root)
     }
 
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.

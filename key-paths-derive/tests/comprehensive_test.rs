@@ -1,5 +1,5 @@
 use key_paths_derive::Kp;
-use rust_key_paths::{KpType, LockKp};
+use rust_key_paths::{KpTrait, KpType, LockKp};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;

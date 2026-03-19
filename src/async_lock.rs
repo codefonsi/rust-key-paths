@@ -29,7 +29,7 @@
 //!    - Only clones `PhantomData<T>` which is zero-sized
 //!    - Compiled away completely - zero runtime cost
 
-use crate::Kp;
+use crate::{Kp, KpTrait};
 use async_trait::async_trait;
 use std::sync::Arc;
 
