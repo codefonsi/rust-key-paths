@@ -82,18 +82,18 @@ fn main() {
         .then(DarkStruct::dsf())
         .get(&instance);
     assert_eq!(dsf, Some(&"dark_value".to_string()));
-    
+
     /*
             Kp - struct 8 genric
             KpType - typealias 2 genric
-            KpTrait - to enforce use to use kp 
-            KpTraitType - 2 gen 
+            KpTrait - to enforce use to use kp
+            KpTraitType - 2 gen
             Accessor - acccessor fns into a triat - get, get_mut
             OptionalAccessor - get_optionl, get_mut_optional
             HofExt - map, filter, flatmap .....
             Chain - then
             Coercion - to_box, to_arc
     ChainExt - then_async, then_pin_fut, then_sync
-    */ 
+    */
     println!("{:?}", instance);
 }

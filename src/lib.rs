@@ -288,16 +288,15 @@ pub type KpType<'a, R, V> = Kp<
 >;
 
 pub type KpTraitType<'a, R, V> = dyn KpTrait<
-    R,
-    V,
-    &'a R,
-    &'a V,
-    &'a mut R,
-    &'a mut V,
-    for<'b> fn(&'b R) -> Option<&'b V>,
-    for<'b> fn(&'b mut R) -> Option<&'b mut V>,
->;
-
+        R,
+        V,
+        &'a R,
+        &'a V,
+        &'a mut R,
+        &'a mut V,
+        for<'b> fn(&'b R) -> Option<&'b V>,
+        for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+    >;
 
 /// Keypath for `Option<RefCell<T>>`: `get` returns `Option<Ref<V>>` so the caller holds the guard.
 /// Use `.get(root).as_ref().map(std::cell::Ref::deref)` to get `Option<&V>` while the `Ref` is in scope.
@@ -900,28 +899,312 @@ where
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
-pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
-// where
-//     Root: std::borrow::Borrow<R>,
-//     Value: std::borrow::Borrow<V>,
-//     MutRoot: std::borrow::BorrowMut<R>,
-//     MutValue: std::borrow::BorrowMut<V>,
-//     G: Fn(Root) -> Option<Value>,
-//     S: Fn(MutRoot) -> Option<MutValue>,
-{
+pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     fn type_id_of_root() -> TypeId
     where
         R: 'static,
-    { std::any::TypeId::of::<R>() }
+    {
+        std::any::TypeId::of::<R>()
+    }
     fn type_id_of_value() -> TypeId
     where
         V: 'static,
-    { std::any::TypeId::of::<V>()}
+    {
+        std::any::TypeId::of::<V>()
+    }
     fn get(&self, root: Root) -> Option<Value>;
     fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
 }
 
-pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
+    /// Chain with a sync [crate::lock::LockKp]. Use `.get(root)` / `.get_mut(root)` on the returned keypath.
+    fn then_lock<
+        Lock,
+        Mid,
+        V2,
+        LockValue,
+        MidValue,
+        Value2,
+        MutLock,
+        MutMid,
+        MutValue2,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >(
+        self,
+        lock_kp: crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    ) -> crate::lock::KpThenLockKp<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        Self,
+        crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    >
+    where
+        V: 'static + Clone,
+        V2: 'static,
+        Value: std::borrow::Borrow<V>,
+        Value2: std::borrow::Borrow<V2>,
+        MutValue: std::borrow::BorrowMut<V>,
+        MutValue2: std::borrow::BorrowMut<V2>,
+        LockValue: std::borrow::Borrow<Lock>,
+        MidValue: std::borrow::Borrow<Mid>,
+        MutLock: std::borrow::BorrowMut<Lock>,
+        MutMid: std::borrow::BorrowMut<Mid>,
+        G1: Fn(Value) -> Option<LockValue>,
+        S1: Fn(MutValue) -> Option<MutLock>,
+        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
+        G2: Fn(MidValue) -> Option<Value2>,
+        S2: Fn(MutMid) -> Option<MutValue2>,
+        Self: Sized;
+
+    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
+    #[cfg(feature = "pin_project")]
+    fn then_pin_future<Struct, Output, L>(
+        self,
+        pin_fut: L,
+    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
+    where
+        V: 'static,
+        Struct: Unpin + 'static,
+        Output: 'static,
+        Value: std::borrow::Borrow<Struct>,
+        MutValue: std::borrow::BorrowMut<Struct>,
+        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+        Self: Sized;
+
+    /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
+    fn then_async<AsyncKp>(
+        self,
+        async_kp: AsyncKp,
+    ) -> crate::async_lock::KpThenAsyncKeyPath<
+        R,
+        V,
+        <AsyncKp::Value as KeyPathValueTarget>::Target,
+        Root,
+        Value,
+        AsyncKp::Value,
+        MutRoot,
+        MutValue,
+        AsyncKp::MutValue,
+        Self,
+        AsyncKp,
+    >
+    where
+        V: 'static,
+        Value: std::borrow::Borrow<V>,
+        MutValue: std::borrow::BorrowMut<V>,
+        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
+        AsyncKp::Value: KeyPathValueTarget
+            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
+        Self: Sized;
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> ChainExt<R, V, Root, Value, MutRoot, MutValue>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn then_lock<
+        Lock,
+        Mid,
+        V2,
+        LockValue,
+        MidValue,
+        Value2,
+        MutLock,
+        MutMid,
+        MutValue2,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >(
+        self,
+        lock_kp: crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    ) -> crate::lock::KpThenLockKp<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        Self,
+        crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    >
+    where
+        V: 'static + Clone,
+        V2: 'static,
+        Value: std::borrow::Borrow<V>,
+        Value2: std::borrow::Borrow<V2>,
+        MutValue: std::borrow::BorrowMut<V>,
+        MutValue2: std::borrow::BorrowMut<V2>,
+        LockValue: std::borrow::Borrow<Lock>,
+        MidValue: std::borrow::Borrow<Mid>,
+        MutLock: std::borrow::BorrowMut<Lock>,
+        MutMid: std::borrow::BorrowMut<Mid>,
+        G1: Fn(Value) -> Option<LockValue>,
+        S1: Fn(MutValue) -> Option<MutLock>,
+        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
+        G2: Fn(MidValue) -> Option<Value2>,
+        S2: Fn(MutMid) -> Option<MutValue2>,
+    {
+        crate::lock::KpThenLockKp {
+            first: self,
+            second: lock_kp,
+            _p: std::marker::PhantomData,
+        }
+    }
+
+    #[cfg(feature = "pin_project")]
+    fn then_pin_future<Struct, Output, L>(
+        self,
+        pin_fut: L,
+    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
+    where
+        V: 'static,
+        Struct: Unpin + 'static,
+        Output: 'static,
+        Value: std::borrow::Borrow<Struct>,
+        MutValue: std::borrow::BorrowMut<Struct>,
+        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+    {
+        crate::pin::KpThenPinFuture {
+            first: self,
+            second: pin_fut,
+            _p: std::marker::PhantomData,
+        }
+    }
+
+    fn then_async<AsyncKp>(
+        self,
+        async_kp: AsyncKp,
+    ) -> crate::async_lock::KpThenAsyncKeyPath<
+        R,
+        V,
+        <AsyncKp::Value as KeyPathValueTarget>::Target,
+        Root,
+        Value,
+        AsyncKp::Value,
+        MutRoot,
+        MutValue,
+        AsyncKp::MutValue,
+        Self,
+        AsyncKp,
+    >
+    where
+        V: 'static,
+        Value: std::borrow::Borrow<V>,
+        MutValue: std::borrow::BorrowMut<V>,
+        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
+        AsyncKp::Value: KeyPathValueTarget
+            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
+    {
+        crate::async_lock::KpThenAsyncKeyPath {
+            first: self,
+            second: async_kp,
+            _p: std::marker::PhantomData,
+        }
+    }
+}
+
+pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+{
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
     #[inline]
     fn get_optional(&self, root: Option<Root>) -> Option<Value> {
@@ -953,7 +1236,8 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, 
     }
 }
 
-pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
+pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
     Value: std::borrow::Borrow<V>,
@@ -1022,10 +1306,10 @@ where
             },
         )
     }
-
 }
 
-pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
+pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
     Value: std::borrow::Borrow<V>,
@@ -1082,7 +1366,7 @@ where
     //     )
     // }
 
-        /// Map the value through a transformation function.
+    /// Map the value through a transformation function.
     fn map<MappedValue, F>(
         &self,
         mapper: F,
@@ -1458,9 +1742,7 @@ where
     //     Z: 'static {
     //         todo!()
     //     }
-
 }
-
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -1482,7 +1764,8 @@ where
     }
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+impl<R, V, Root, Value, MutRoot, MutValue, G, S>
+    CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -1494,8 +1777,8 @@ where
 {
 }
 
-
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+impl<R, V, Root, Value, MutRoot, MutValue, G, S>
+    HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -1579,157 +1862,7 @@ where
     //         _p: std::marker::PhantomData,
     //     }
     // }
-
-    /// Chain with a sync [crate::lock::LockKp]. Use `.get(root)` / `.get_mut(root)` on the returned keypath.
-    pub fn then_lock<
-        Lock,
-        Mid,
-        V2,
-        LockValue,
-        MidValue,
-        Value2,
-        MutLock,
-        MutMid,
-        MutValue2,
-        G1,
-        S1,
-        L,
-        G2,
-        S2,
-    >(
-        self,
-        lock_kp: crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    ) -> crate::lock::KpThenLockKp<
-        R,
-        V,
-        V2,
-        Root,
-        Value,
-        Value2,
-        MutRoot,
-        MutValue,
-        MutValue2,
-        Self,
-        crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    >
-    where
-        V: 'static + Clone,
-        V2: 'static,
-        Value: std::borrow::Borrow<V>,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue: std::borrow::BorrowMut<V>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        LockValue: std::borrow::Borrow<Lock>,
-        MidValue: std::borrow::Borrow<Mid>,
-        MutLock: std::borrow::BorrowMut<Lock>,
-        MutMid: std::borrow::BorrowMut<Mid>,
-        G1: Fn(Value) -> Option<LockValue>,
-        S1: Fn(MutValue) -> Option<MutLock>,
-        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
-        G2: Fn(MidValue) -> Option<Value2>,
-        S2: Fn(MutMid) -> Option<MutValue2>,
-    {
-        crate::lock::KpThenLockKp {
-            first: self,
-            second: lock_kp,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
-    /// Enables composing futures: `kp.then_pin_future(S::fut_pin_future_kp()).then(...)` to go deeper.
-    #[cfg(feature = "pin_project")]
-    pub fn then_pin_future<Struct, Output, L>(
-        self,
-        pin_fut: L,
-    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
-    where
-        V: 'static,
-        Struct: Unpin + 'static,
-        Output: 'static,
-        Value: std::borrow::Borrow<Struct>,
-        MutValue: std::borrow::BorrowMut<Struct>,
-        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
-    {
-        crate::pin::KpThenPinFuture {
-            first: self,
-            second: pin_fut,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
-    /// When `AsyncKp::Value` is a reference type (`&T` / `&mut T`), `V2` is inferred as `T` via [KeyPathValueTarget].
-    pub fn then_async<AsyncKp>(
-        self,
-        async_kp: AsyncKp,
-    ) -> crate::async_lock::KpThenAsyncKeyPath<
-        R,
-        V,
-        <AsyncKp::Value as KeyPathValueTarget>::Target,
-        Root,
-        Value,
-        AsyncKp::Value,
-        MutRoot,
-        MutValue,
-        AsyncKp::MutValue,
-        Self,
-        AsyncKp,
-    >
-    where
-        V: 'static,
-        Value: std::borrow::Borrow<V>,
-        MutValue: std::borrow::BorrowMut<V>,
-        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
-        AsyncKp::Value: KeyPathValueTarget
-            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
-    {
-        crate::async_lock::KpThenAsyncKeyPath {
-            first: self,
-            second: async_kp,
-            _p: std::marker::PhantomData,
-        }
-    }
 }
-
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
 ///
@@ -2176,15 +2309,14 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    fn kp_adaptable<T>(kp: T) 
-    where T: KpTrait<TestKP, String> {
+    fn kp_adaptable<T>(kp: T)
+    where
+        T: KpTrait<TestKP, String>,
+    {
         // kp.get
         // .get_mut
     }
-    fn test_kp_trait() {
-
-    }
-
+    fn test_kp_trait() {}
 
     #[derive(Debug)]
     struct TestKP {
