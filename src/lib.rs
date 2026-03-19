@@ -945,6 +945,78 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, 
     }
 }
 
+pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn for_arc<'b>(
+        &self,
+    ) -> Kp<
+        std::sync::Arc<R>,
+        V,
+        std::sync::Arc<R>,
+        Value,
+        std::sync::Arc<R>,
+        MutValue,
+        impl Fn(std::sync::Arc<R>) -> Option<Value>,
+        impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
+    >
+    where
+        R: 'b,
+        V: 'b,
+        Root: for<'a> From<&'a R>,
+        MutRoot: for<'a> From<&'a mut R>,
+    {
+        Kp::new(
+            move |arc_root: std::sync::Arc<R>| {
+                let r_ref: &R = &*arc_root;
+                self.get(Root::from(r_ref))
+            },
+            move |mut arc_root: std::sync::Arc<R>| {
+                // Get mutable reference only if we have exclusive ownership
+                std::sync::Arc::get_mut(&mut arc_root)
+                    .and_then(|r_mut| self.get_mut(MutRoot::from(r_mut)))
+            },
+        )
+    }
+
+    fn for_box<'a>(
+        &self,
+    ) -> Kp<
+        Box<R>,
+        V,
+        Box<R>,
+        Value,
+        Box<R>,
+        MutValue,
+        impl Fn(Box<R>) -> Option<Value>,
+        impl Fn(Box<R>) -> Option<MutValue>,
+    >
+    where
+        R: 'a,
+        V: 'a,
+        Root: for<'b> From<&'b R>,
+        MutRoot: for<'b> From<&'b mut R>,
+    {
+        Kp::new(
+            move |r: Box<R>| {
+                let r_ref: &R = r.as_ref();
+                self.get(Root::from(r_ref))
+            },
+            move |mut r: Box<R>| {
+                // Get mutable reference only if we have exclusive ownership
+                self.get_mut(MutRoot::from(r.as_mut()))
+            },
+        )
+    }
+
+}
+
 pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
 where
     Root: std::borrow::Borrow<R>,
@@ -1402,6 +1474,19 @@ where
     }
 }
 
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+
+
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
@@ -1662,92 +1747,6 @@ where
             second: async_kp,
             _p: std::marker::PhantomData,
         }
-    }
-
-    /// Chain this keypath with another to create a composition
-    /// Alias for `then` with a more descriptive name
-    pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        self.then(next)
-    }
-
-    pub fn for_arc<'b>(
-        &self,
-    ) -> Kp<
-        std::sync::Arc<R>,
-        V,
-        std::sync::Arc<R>,
-        Value,
-        std::sync::Arc<R>,
-        MutValue,
-        impl Fn(std::sync::Arc<R>) -> Option<Value>,
-        impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
-    >
-    where
-        R: 'b,
-        V: 'b,
-        Root: for<'a> From<&'a R>,
-        MutRoot: for<'a> From<&'a mut R>,
-    {
-        Kp::new(
-            move |arc_root: std::sync::Arc<R>| {
-                let r_ref: &R = &*arc_root;
-                (&self.get)(Root::from(r_ref))
-            },
-            move |mut arc_root: std::sync::Arc<R>| {
-                // Get mutable reference only if we have exclusive ownership
-                std::sync::Arc::get_mut(&mut arc_root)
-                    .and_then(|r_mut| (&self.set)(MutRoot::from(r_mut)))
-            },
-        )
-    }
-
-    pub fn for_box<'a>(
-        &self,
-    ) -> Kp<
-        Box<R>,
-        V,
-        Box<R>,
-        Value,
-        Box<R>,
-        MutValue,
-        impl Fn(Box<R>) -> Option<Value>,
-        impl Fn(Box<R>) -> Option<MutValue>,
-    >
-    where
-        R: 'a,
-        V: 'a,
-        Root: for<'b> From<&'b R>,
-        MutRoot: for<'b> From<&'b mut R>,
-    {
-        Kp::new(
-            move |r: Box<R>| {
-                let r_ref: &R = r.as_ref();
-                (&self.get)(Root::from(r_ref))
-            },
-            move |mut r: Box<R>| {
-                // Get mutable reference only if we have exclusive ownership
-                (self.set)(MutRoot::from(r.as_mut()))
-            },
-        )
     }
 }
 
