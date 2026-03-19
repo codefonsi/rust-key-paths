@@ -1,4 +1,5 @@
 use key_paths_derive::Kp;
+use rust_key_paths::ExtensionTrait;
 
 #[derive(Debug, Kp, Default, Clone)]
 struct SomeComplexStruct {
@@ -81,6 +82,11 @@ fn main() {
         .then(DarkStruct::dsf())
         .get(&instance);
     assert_eq!(dsf, Some(&"dark_value".to_string()));
-
+    
+    /*
+    KpTrait - to enforce use to use kp 
+    Accessor - acccessor fns into a triat - get, get_mut
+    OptionalAccessor - get_optionl, get_mut_optional
+    */ 
     println!("{:?}", instance);
 }

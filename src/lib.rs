@@ -890,6 +890,17 @@ where
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
+trait KpTrait<Root: 'static, Value: 'static>  {
+    fn type_id_of_root() -> TypeId{
+        TypeId::of::<Root>()
+    }
+
+    fn type_id_of_value() -> TypeId{
+        TypeId::of::<Value>()
+    }
+}
+
+
 /// AKp (AnyKeyPath) - Hides both Root and Value types
 /// Most flexible keypath type for heterogeneous collections
 /// Uses dynamic dispatch and type checking at runtime
