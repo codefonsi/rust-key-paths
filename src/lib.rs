@@ -901,13 +901,13 @@ where
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
 pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
 {
     fn type_id_of_root() -> TypeId
     where
@@ -919,36 +919,6 @@ where
     { std::any::TypeId::of::<V>()}
     fn get(&self, root: Root) -> Option<Value>;
     fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
-
-    fn then<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>
-        + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-        impl Fn(MutRoot) -> Option<MutSubValue>
-        + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static;
-    // {
-    //     Kp::new(
-    //         move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
-    //         move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
-    //     )
-    // }
-
-
 }
 
 pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
