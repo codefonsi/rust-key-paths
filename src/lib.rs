@@ -994,6 +994,379 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
     //     )
     // }
 
+        /// Map the value through a transformation function.
+    fn map<MappedValue, F>(
+        &self,
+        mapper: F,
+    ) -> Kp<
+        R,
+        MappedValue,
+        Root,
+        MappedValue,
+        MutRoot,
+        MappedValue,
+        impl Fn(Root) -> Option<MappedValue> + '_,
+        impl Fn(MutRoot) -> Option<MappedValue> + '_,
+    >
+    where
+        F: Fn(&V) -> MappedValue + Copy + 'static,
+        V: 'static,
+        MappedValue: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get_ext(root).map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut_ext(root).map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+        )
+    }
+
+    /// Filter the value based on a predicate.
+    fn filter<F>(
+        &self,
+        predicate: F,
+    ) -> Kp<
+        R,
+        V,
+        Root,
+        Value,
+        MutRoot,
+        MutValue,
+        impl Fn(Root) -> Option<Value> + '_,
+        impl Fn(MutRoot) -> Option<MutValue> + '_,
+    >
+    where
+        F: Fn(&V) -> bool + Copy + 'static,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get_ext(root).filter(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut_ext(root).filter(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+            },
+        )
+    }
+
+    /// Map and flatten when mapper returns an Option.
+    fn filter_map<MappedValue, F>(
+        &self,
+        mapper: F,
+    ) -> Kp<
+        R,
+        MappedValue,
+        Root,
+        MappedValue,
+        MutRoot,
+        MappedValue,
+        impl Fn(Root) -> Option<MappedValue> + '_,
+        impl Fn(MutRoot) -> Option<MappedValue> + '_,
+    >
+    where
+        F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
+        V: 'static,
+        MappedValue: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get_ext(root).and_then(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut_ext(root).and_then(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+        )
+    }
+
+    /// Apply a function for its side effects and return the value.
+    fn inspect<F>(
+        &self,
+        inspector: F,
+    ) -> Kp<
+        R,
+        V,
+        Root,
+        Value,
+        MutRoot,
+        MutValue,
+        impl Fn(Root) -> Option<Value> + '_,
+        impl Fn(MutRoot) -> Option<MutValue> + '_,
+    >
+    where
+        F: Fn(&V) + Copy + 'static,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get_ext(root).map(|value| {
+                    let v: &V = value.borrow();
+                    inspector(v);
+                    value
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut_ext(root).map(|value| {
+                    let v: &V = value.borrow();
+                    inspector(v);
+                    value
+                })
+            },
+        )
+    }
+
+    /// Flat map - maps to an iterator and flattens.
+    fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
+    where
+        F: Fn(&V) -> I + 'static,
+        V: 'static,
+        I: IntoIterator<Item = Item>,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v).into_iter().collect()
+                })
+                .unwrap_or_else(Vec::new)
+        }
+    }
+
+    /// Fold/reduce the value using an accumulator function.
+    fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
+    where
+        F: Fn(Acc, &V) -> Acc + 'static,
+        V: 'static,
+        Acc: Copy + 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    folder(init, v)
+                })
+                .unwrap_or(init)
+        }
+    }
+
+    /// Check if any element satisfies a predicate.
+    fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+                .unwrap_or(false)
+        }
+    }
+
+    /// Check if all elements satisfy a predicate.
+    fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+                .unwrap_or(true)
+        }
+    }
+
+    /// Count elements in a collection value.
+    fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
+    where
+        F: Fn(&V) -> usize + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).map(|value| {
+                let v: &V = value.borrow();
+                counter(v)
+            })
+        }
+    }
+
+    /// Find first element matching predicate in a collection value.
+    fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).and_then(|value| {
+                let v: &V = value.borrow();
+                finder(v)
+            })
+        }
+    }
+
+    /// Take first N elements from a collection value.
+    fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).map(|value| {
+                let v: &V = value.borrow();
+                taker(v, n)
+            })
+        }
+    }
+
+    /// Skip first N elements from a collection value.
+    fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).map(|value| {
+                let v: &V = value.borrow();
+                skipper(v, n)
+            })
+        }
+    }
+
+    /// Partition a collection value into two groups based on predicate.
+    fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).map(|value| {
+                let v: &V = value.borrow();
+                partitioner(v)
+            })
+        }
+    }
+
+    /// Get min value from a collection.
+    fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).and_then(|value| {
+                let v: &V = value.borrow();
+                min_fn(v)
+            })
+        }
+    }
+
+    /// Get max value from a collection.
+    fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).and_then(|value| {
+                let v: &V = value.borrow();
+                max_fn(v)
+            })
+        }
+    }
+
+    /// Sum numeric values in a collection.
+    fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
+    where
+        F: Fn(&V) -> Sum + 'static,
+        V: 'static,
+        Sum: 'static,
+    {
+        move |root: Root| {
+            self.get_ext(root).map(|value| {
+                let v: &V = value.borrow();
+                sum_fn(v)
+            })
+        }
+    }
+
+    /// Zip two keypaths on the same root; get_mut returns None.
+    fn zip<V2, Value2, MutValue2, G2, S2>(
+        self,
+        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+    ) -> Kp<
+        R,
+        (Value, Value2),
+        Root,
+        (Value, Value2),
+        MutRoot,
+        (Value, Value2),
+        impl Fn(Root) -> Option<(Value, Value2)>,
+        impl Fn(MutRoot) -> Option<(Value, Value2)>,
+    >
+    where
+        Root: Copy,
+        Value2: std::borrow::Borrow<V2>,
+        MutValue2: std::borrow::BorrowMut<V2>,
+        G2: Fn(Root) -> Option<Value2>,
+        S2: Fn(MutRoot) -> Option<MutValue2>,
+        V2: 'static;
+
+    /// Zip two keypaths and transform the pair with a function; get_mut returns None.
+    fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
+        self,
+        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+        transform: F,
+    ) -> Kp<
+        R,
+        Z,
+        Root,
+        Z,
+        MutRoot,
+        Z,
+        impl Fn(Root) -> Option<Z>,
+        impl Fn(MutRoot) -> Option<Z>,
+    >
+    where
+        Root: Copy,
+        Value2: std::borrow::Borrow<V2>,
+        MutValue2: std::borrow::BorrowMut<V2>,
+        G2: Fn(Root) -> Option<Value2>,
+        S2: Fn(MutRoot) -> Option<MutValue2>,
+        F: Fn(Value, Value2) -> Z + Copy + 'static,
+        V2: 'static,
+        Z: 'static;
+
 }
 
 
