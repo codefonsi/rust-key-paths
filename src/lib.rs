@@ -1916,6 +1916,33 @@ where
         (self.set)(root)
     }
 
+    #[inline]
+    pub fn then<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
+            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+        )
+    }
+
 }
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
