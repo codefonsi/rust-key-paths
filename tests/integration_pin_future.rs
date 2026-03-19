@@ -34,8 +34,10 @@ async fn test_then_pin_future_identity() {
     };
 
     // Identity Kp to the struct, then_pin_future awaits the #[pin] Future field
-    let identity_kp: KpType<WithPinnedBoxFuture, WithPinnedBoxFuture> =
-        Kp::new(|x: &WithPinnedBoxFuture| Some(x), |x: &mut WithPinnedBoxFuture| Some(x));
+    let identity_kp: KpType<WithPinnedBoxFuture, WithPinnedBoxFuture> = Kp::new(
+        |x: &WithPinnedBoxFuture| Some(x),
+        |x: &mut WithPinnedBoxFuture| Some(x),
+    );
     let kp = identity_kp.then_pin_future(WithPinnedBoxFuture::fut_pin_future_kp());
 
     let result = kp.get_mut(&mut data).await;
@@ -53,8 +55,7 @@ async fn test_then_pin_future_go_deeper() {
     };
 
     // Navigate to inner field (sync), then await its #[pin] Future
-    let kp = Wrapper::inner()
-        .then_pin_future(WithPinnedBoxFuture::fut_pin_future_kp());
+    let kp = Wrapper::inner().then_pin_future(WithPinnedBoxFuture::fut_pin_future_kp());
 
     let result = kp.get_mut(&mut data).await;
     assert_eq!(result, Some(99));
@@ -68,14 +69,23 @@ async fn test_then_pin_future_get_optional_or_else() {
         fut: Box::pin(ready(21)),
     };
 
-    let identity_kp: KpType<WithPinnedBoxFuture, WithPinnedBoxFuture> =
-        Kp::new(|x: &WithPinnedBoxFuture| Some(x), |x: &mut WithPinnedBoxFuture| Some(x));
+    let identity_kp: KpType<WithPinnedBoxFuture, WithPinnedBoxFuture> = Kp::new(
+        |x: &WithPinnedBoxFuture| Some(x),
+        |x: &mut WithPinnedBoxFuture| Some(x),
+    );
     let kp = identity_kp.then_pin_future(WithPinnedBoxFuture::fut_pin_future_kp());
 
     // get_optional
-    assert!(kp.get_optional(None::<&WithPinnedBoxFuture>).await.is_none());
+    assert!(
+        kp.get_optional(None::<&WithPinnedBoxFuture>)
+            .await
+            .is_none()
+    );
     assert_eq!(kp.get_optional(Some(&data)).await, None); // get returns None for pin future
-    assert_eq!(kp.get_mut_optional(None::<&mut WithPinnedBoxFuture>).await, None);
+    assert_eq!(
+        kp.get_mut_optional(None::<&mut WithPinnedBoxFuture>).await,
+        None
+    );
     assert_eq!(kp.get_mut_optional(Some(&mut data)).await, Some(21));
 
     // get_or_else / get_mut_or_else

@@ -28,8 +28,6 @@ pub use lock::{
 // Export the async_lock module
 pub mod async_lock;
 
-
-
 // pub struct KpStatic<R, V> {
 //     pub get: fn(&R) -> Option<&V>,
 //     pub set: fn(&mut R) -> Option<&mut V>,
@@ -71,8 +69,6 @@ pub mod async_lock;
 //
 // pub static STATIC_STR_FIELD_KP: KpStatic<AllContainersTest, &'static str> =
 //     KpStatic::new(__get_static_str_field, __set_static_str_field);
-
-
 
 #[cfg(feature = "pin_project")]
 pub mod pin;
@@ -165,7 +161,12 @@ macro_rules! zip_with_kp {
         }
     };
     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr) => {
-        match ($kp1.get($root), $kp2.get($root), $kp3.get($root), $kp4.get($root)) {
+        match (
+            $kp1.get($root),
+            $kp2.get($root),
+            $kp3.get($root),
+            $kp4.get($root),
+        ) {
             (Some(__a), Some(__b), Some(__c), Some(__d)) => Some($closure((__a, __b, __c, __d))),
             _ => None,
         }
@@ -206,9 +207,9 @@ pub type KpValue<'a, R, V> = Kp<
     R,
     V,
     &'a R,
-    V,           // Returns owned V, not &V
+    V, // Returns owned V, not &V
     &'a mut R,
-    V,           // Returns owned V, not &mut V
+    V, // Returns owned V, not &mut V
     for<'b> fn(&'b R) -> Option<V>,
     for<'b> fn(&'b mut R) -> Option<V>,
 >;
@@ -218,9 +219,9 @@ pub type KpOwned<R, V> = Kp<
     R,
     V,
     R,
-    V,           // Returns owned V, not &V
+    V, // Returns owned V, not &V
     R,
-    V,           // Returns owned V, not &mut V
+    V, // Returns owned V, not &mut V
     fn(R) -> Option<V>,
     fn(R) -> Option<V>,
 >;
@@ -230,27 +231,15 @@ pub type KpRoot<R> = Kp<
     R,
     R,
     R,
-    R,           // Returns owned V, not &V
+    R, // Returns owned V, not &V
     R,
-    R,           // Returns owned V, not &mut V
+    R, // Returns owned V, not &mut V
     fn(R) -> Option<R>,
     fn(R) -> Option<R>,
 >;
 
 /// Kp for void - experimental
-pub type KpVoid = Kp<
-    (),
-    (),
-    (),
-    (),
-    (),
-    (),
-    fn() -> Option<()>,
-    fn() -> Option<()>,
->;
-
-
-
+pub type KpVoid = Kp<(), (), (), (), (), (), fn() -> Option<()>, fn() -> Option<()>>;
 
 pub type KpDynamic<R, V> = Kp<
     R,
@@ -264,21 +253,26 @@ pub type KpDynamic<R, V> = Kp<
 >;
 
 pub type KpBox<'a, R, V> = Kp<
-R, V,
-&'a R, &'a V,
-&'a mut R, &'a mut V,
-Box<dyn Fn(&'a R) -> Option<&'a V> + 'a>,
-Box<dyn Fn(&'a mut R) -> Option<&'a mut V> + 'a>,
+    R,
+    V,
+    &'a R,
+    &'a V,
+    &'a mut R,
+    &'a mut V,
+    Box<dyn Fn(&'a R) -> Option<&'a V> + 'a>,
+    Box<dyn Fn(&'a mut R) -> Option<&'a mut V> + 'a>,
 >;
 
 pub type KpArc<'a, R, V> = Kp<
-    R, V,
-    &'a R, &'a V,
-    &'a mut R, &'a mut V,
+    R,
+    V,
+    &'a R,
+    &'a V,
+    &'a mut R,
+    &'a mut V,
     Arc<dyn Fn(&'a R) -> Option<&'a V> + Send + Sync + 'a>,
     Arc<dyn Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync + 'a>,
 >;
-
 
 pub type KpType<'a, R, V> = Kp<
     R,
@@ -379,16 +373,18 @@ pub type KpComposed<R, V> = Kp<
     Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
 >;
 
-impl<R, V> Kp<
-    R,
-    V,
-    &'static R,
-    &'static V,
-    &'static mut R,
-    &'static mut V,
-    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
-    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
-> {
+impl<R, V>
+    Kp<
+        R,
+        V,
+        &'static R,
+        &'static V,
+        &'static mut R,
+        &'static mut V,
+        Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+        Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
+    >
+{
     /// Build a keypath from two closures (e.g. when they capture a variable like an index).
     /// Same pattern as `Kp::new` in lock.rs; use this when the keypath captures variables.
     pub fn from_closures<G, S>(get: G, set: S) -> Self
@@ -890,16 +886,32 @@ where
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
-trait KpTrait<Root: 'static, Value: 'static>  {
-    fn type_id_of_root() -> TypeId{
-        TypeId::of::<Root>()
+trait KpTrait<Root, Value> {
+    fn type_id_of_root() -> TypeId
+    where
+        Root: 'static,
+    {
+        std::any::TypeId::of::<Root>()
     }
 
-    fn type_id_of_value() -> TypeId{
-        TypeId::of::<Value>()
+    fn type_id_of_value() -> TypeId
+    where
+        Value: 'static,
+    {
+        std::any::TypeId::of::<Value>()
     }
 }
 
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
 
 /// AKp (AnyKeyPath) - Hides both Root and Value types
 /// Most flexible keypath type for heterogeneous collections
@@ -929,7 +941,8 @@ where
 }
 
 // Kp is a functional component (get/set) with no owned data; Send/Sync follow from G and S.
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
     MutRoot: std::borrow::BorrowMut<R>,
@@ -938,7 +951,8 @@ where
     S: Fn(MutRoot) -> Option<MutValue> + Send,
 {
 }
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
     MutRoot: std::borrow::BorrowMut<R>,
@@ -972,7 +986,6 @@ where
             _p: std::marker::PhantomData,
         }
     }
-
 
     #[inline]
     pub fn get(&self, root: Root) -> Option<Value> {
@@ -1023,8 +1036,10 @@ where
         SubValue,
         MutRoot,
         MutSubValue,
-        impl Fn(Root) -> Option<SubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-        impl Fn(MutRoot) -> Option<MutSubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
+        impl Fn(Root) -> Option<SubValue>
+        + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
+        impl Fn(MutRoot) -> Option<MutSubValue>
+        + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
     >
     where
         SubValue: std::borrow::Borrow<SV>,
@@ -1076,7 +1091,37 @@ where
             G2,
             S2,
         >,
-    ) -> crate::lock::KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, Self, crate::lock::LockKp<V, Lock, Mid, V2, Value, LockValue, MidValue, Value2, MutValue, MutLock, MutMid, MutValue2, G1, S1, L, G2, S2>>
+    ) -> crate::lock::KpThenLockKp<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        Self,
+        crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    >
     where
         V: 'static + Clone,
         V2: 'static,
@@ -1107,17 +1152,7 @@ where
     pub fn then_pin_future<Struct, Output, L>(
         self,
         pin_fut: L,
-    ) -> crate::pin::KpThenPinFuture<
-        R,
-        Struct,
-        Output,
-        Root,
-        MutRoot,
-        Value,
-        MutValue,
-        Self,
-        L,
-    >
+    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
         V: 'static,
         Struct: Unpin + 'static,
@@ -2506,7 +2541,10 @@ mod tests {
         let kp = TestKP::identity();
         let kp_a = TestKP::a();
         // TestKP::a().for_arc();
-        let wres = TestKP::f().then(TestKP2::a()).get_mut(&mut instance).unwrap();
+        let wres = TestKP::f()
+            .then(TestKP2::a())
+            .get_mut(&mut instance)
+            .unwrap();
         *wres = String::from("a3 changed successfully");
         let res = TestKP::f().then(TestKP2::a()).get(&instance);
         println!("{:?}", res);
@@ -5215,8 +5253,10 @@ mod tests {
             Kp::new(|r: &Root| Some(&r.guard), |r: &mut Root| Some(&mut r.guard));
 
         let lock_kp = {
-            let prev: KpType<Arc<Mutex<Level1>>, Arc<Mutex<Level1>>> =
-                Kp::new(|g: &Arc<Mutex<Level1>>| Some(g), |g: &mut Arc<Mutex<Level1>>| Some(g));
+            let prev: KpType<Arc<Mutex<Level1>>, Arc<Mutex<Level1>>> = Kp::new(
+                |g: &Arc<Mutex<Level1>>| Some(g),
+                |g: &mut Arc<Mutex<Level1>>| Some(g),
+            );
             let next: KpType<Level1, Level1> =
                 Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
             crate::lock::LockKp::new(prev, crate::lock::ArcMutexAccess::new(), next)
@@ -5259,12 +5299,16 @@ mod tests {
             }))),
         };
 
-        let kp_msg: KpType<RootWithEnum, Arc<Mutex<Message>>> =
-            Kp::new(|r: &RootWithEnum| Some(&r.msg), |r: &mut RootWithEnum| Some(&mut r.msg));
+        let kp_msg: KpType<RootWithEnum, Arc<Mutex<Message>>> = Kp::new(
+            |r: &RootWithEnum| Some(&r.msg),
+            |r: &mut RootWithEnum| Some(&mut r.msg),
+        );
 
         let lock_kp_msg = {
-            let prev: KpType<Arc<Mutex<Message>>, Arc<Mutex<Message>>> =
-                Kp::new(|m: &Arc<Mutex<Message>>| Some(m), |m: &mut Arc<Mutex<Message>>| Some(m));
+            let prev: KpType<Arc<Mutex<Message>>, Arc<Mutex<Message>>> = Kp::new(
+                |m: &Arc<Mutex<Message>>| Some(m),
+                |m: &mut Arc<Mutex<Message>>| Some(m),
+            );
             let next: KpType<Message, Message> =
                 Kp::new(|m: &Message| Some(m), |m: &mut Message| Some(m));
             crate::lock::LockKp::new(prev, crate::lock::ArcMutexAccess::new(), next)
@@ -5282,8 +5326,8 @@ mod tests {
     #[cfg(all(feature = "tokio", feature = "parking_lot"))]
     #[tokio::test]
     async fn test_kp_then_async_deep_chain() {
-        use std::sync::Arc;
         use crate::async_lock::{AsyncLockKp, TokioMutexAccess};
+        use std::sync::Arc;
 
         #[derive(Clone)]
         struct Root {
@@ -5325,9 +5369,9 @@ mod tests {
     #[cfg(all(feature = "tokio", feature = "parking_lot"))]
     #[tokio::test]
     async fn test_deep_nested_chain_kp_lock_async_lock_kp() {
-        use std::sync::{Arc, Mutex};
         use crate::async_lock::{AsyncLockKp, TokioMutexAccess};
-        use crate::lock::{LockKp, ArcMutexAccess};
+        use crate::lock::{ArcMutexAccess, LockKp};
+        use std::sync::{Arc, Mutex};
 
         // Root -> Arc<Mutex<L1>>
         #[derive(Clone)]
@@ -5361,13 +5405,17 @@ mod tests {
         // LockKp from Root -> Level1
         let identity_l1: KpType<Level1, Level1> =
             Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-        let kp_sync: KpType<Root, Arc<Mutex<Level1>>> =
-            Kp::new(|r: &Root| Some(&r.sync_mutex), |r: &mut Root| Some(&mut r.sync_mutex));
+        let kp_sync: KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+            |r: &Root| Some(&r.sync_mutex),
+            |r: &mut Root| Some(&mut r.sync_mutex),
+        );
         let lock_root_to_l1 = LockKp::new(kp_sync, ArcMutexAccess::new(), identity_l1);
 
         // Kp: Level1 -> Level2
-        let kp_l1_inner: KpType<Level1, Level2> =
-            Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+        let kp_l1_inner: KpType<Level1, Level2> = Kp::new(
+            |l: &Level1| Some(&l.inner),
+            |l: &mut Level1| Some(&mut l.inner),
+        );
 
         // Kp: Level2 -> Arc<TokioMutex<Level3>>
         let kp_l2_tokio: KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> = Kp::new(
@@ -5385,8 +5433,10 @@ mod tests {
         };
 
         // Kp: Level3 -> i32
-        let kp_l3_leaf: KpType<Level3, i32> =
-            Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+        let kp_l3_leaf: KpType<Level3, i32> = Kp::new(
+            |l: &Level3| Some(&l.leaf),
+            |l: &mut Level3| Some(&mut l.leaf),
+        );
 
         // Build chain: LockKp(Root->L1) . then(L1->L2) . then(L2->tokio) . then_async(tokio->L3) . then(L3->leaf)
         let step1 = lock_root_to_l1.then(kp_l1_inner);

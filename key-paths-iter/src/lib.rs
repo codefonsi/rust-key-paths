@@ -12,9 +12,9 @@ pub mod rayon_optimizations;
 pub mod scale_par;
 
 #[cfg(feature = "gpu")]
-pub mod wgpu;
-#[cfg(feature = "gpu")]
 pub mod kp_gpu;
+#[cfg(feature = "gpu")]
+pub mod wgpu;
 
 /// Query builder for collection keypaths (KpType where value is `Vec<Item>`).
 pub struct CollectionQuery<'a, Root, Item> {
@@ -279,10 +279,14 @@ mod tests {
         assert_eq!(results[0].name, "Charlie");
 
         // Check if any active user exists
-        assert!(QueryableCollection::query(&users_kp).filter(|u| u.active).exists(&db));
+        assert!(QueryableCollection::query(&users_kp)
+            .filter(|u| u.active)
+            .exists(&db));
 
         // Count active users
-        let count = QueryableCollection::query(&users_kp).filter(|u| u.active).count(&db);
+        let count = QueryableCollection::query(&users_kp)
+            .filter(|u| u.active)
+            .count(&db);
         assert_eq!(count, 3);
     }
 }

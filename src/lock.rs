@@ -385,8 +385,56 @@ where
         G1,
         S1,
         L,
-        impl Fn(MidValue) -> Option<Value2> + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
-        impl Fn(MutMid) -> Option<MutValue2> + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
+        impl Fn(MidValue) -> Option<Value2>
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
+        impl Fn(MutMid) -> Option<MutValue2>
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
     >
     where
         V: 'static,
@@ -488,8 +536,74 @@ where
         G1,
         S1,
         L,
-        impl Fn(MidValue) -> Option<Value2> + use<G1, G2, G2_1, G2_2, L, L2, Lock, Lock2, LockValue, LockValue2, Mid, Mid2, MidValue, MidValue2, MutLock, MutLock2, MutMid, MutMid2, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S2_1, S2_2, Value, Value2, V, V2>,
-        impl Fn(MutMid) -> Option<MutValue2> + use<G1, G2, G2_1, G2_2, L, L2, Lock, Lock2, LockValue, LockValue2, Mid, Mid2, MidValue, MidValue2, MutLock, MutLock2, MutMid, MutMid2, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S2_1, S2_2, Value, Value2, V, V2>,
+        impl Fn(MidValue) -> Option<Value2>
+        + use<
+            G1,
+            G2,
+            G2_1,
+            G2_2,
+            L,
+            L2,
+            Lock,
+            Lock2,
+            LockValue,
+            LockValue2,
+            Mid,
+            Mid2,
+            MidValue,
+            MidValue2,
+            MutLock,
+            MutLock2,
+            MutMid,
+            MutMid2,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S2_1,
+            S2_2,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
+        impl Fn(MutMid) -> Option<MutValue2>
+        + use<
+            G1,
+            G2,
+            G2_1,
+            G2_2,
+            L,
+            L2,
+            Lock,
+            Lock2,
+            LockValue,
+            LockValue2,
+            Mid,
+            Mid2,
+            MidValue,
+            MidValue2,
+            MutLock,
+            MutLock2,
+            MutMid,
+            MutMid2,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S2_1,
+            S2_2,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
     >
     where
         V: 'static + Clone,
@@ -581,7 +695,8 @@ where
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
         AsyncKp::Value: crate::KeyPathValueTarget
             + std::borrow::Borrow<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
-        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
+        AsyncKp::MutValue:
+            std::borrow::BorrowMut<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
         <AsyncKp::Value as crate::KeyPathValueTarget>::Target: 'static,
     {
         crate::async_lock::KpThenAsyncKeyPath {
@@ -598,10 +713,12 @@ where
 
 /// Keypath that chains a [crate::Kp] with a [LockKp]. Use [crate::Kp::then_lock] to create.
 #[derive(Clone)]
-pub struct KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second> {
+pub struct KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
+{
     pub(crate) first: First,
     pub(crate) second: Second,
-    pub(crate) _p: std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
+    pub(crate) _p:
+        std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
 }
 
 impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
@@ -1649,8 +1766,10 @@ mod tests {
             |r: &Root| Some(&r.locked_data),
             |r: &mut Root| Some(&mut r.locked_data),
         );
-        let next_kp: KpType<Inner, i32> =
-            Kp::new(|i: &Inner| Some(&i.value), |i: &mut Inner| Some(&mut i.value));
+        let next_kp: KpType<Inner, i32> = Kp::new(
+            |i: &Inner| Some(&i.value),
+            |i: &mut Inner| Some(&mut i.value),
+        );
         let lock_kp = LockKp::new(prev_kp, ArcMutexAccess::new(), next_kp);
 
         // get_optional

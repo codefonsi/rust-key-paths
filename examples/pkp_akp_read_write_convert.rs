@@ -165,7 +165,9 @@ fn main() {
 
     // After filtering AKp by root+value, we "convert" by using the known typed Kp
     let title_kp = Product::title();
-    title_kp.get_mut(&mut product).map(|t| *t = "Super Gadget".to_string());
+    title_kp
+        .get_mut(&mut product)
+        .map(|t| *t = "Super Gadget".to_string());
     println!("  Product title after write: {}", product.title);
 
     let price_kp = Product::price();

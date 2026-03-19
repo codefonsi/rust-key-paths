@@ -6,10 +6,10 @@
 //! Run: `cargo bench --bench akp_cpu_bench`
 //! Requires key-paths-iter with features = ["rayon", "gpu"] in dev-dependencies.
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use key_paths_derive::Kp;
 use key_paths_iter::wgpu::{
-    cpu_transform_f32, numeric_akp_f32, GpuValue, IntoNumericAKp, NumericAKp, WgpuContext,
+    GpuValue, IntoNumericAKp, NumericAKp, WgpuContext, cpu_transform_f32, numeric_akp_f32,
 };
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -65,11 +65,9 @@ fn run_numeric_sequential(roots: &[impl AsAny], kp: &NumericAKp) -> Vec<f32> {
 fn run_numeric_rayon(roots: &[impl AsAny + Sync], kp: &NumericAKp) -> Vec<f32> {
     roots
         .par_iter()
-        .map(|root| {
-            match (kp.extractor)(root.as_any()) {
-                Some(GpuValue::F32(f)) => cpu_transform_f32(f),
-                _ => 0.0,
-            }
+        .map(|root| match (kp.extractor)(root.as_any()) {
+            Some(GpuValue::F32(f)) => cpu_transform_f32(f),
+            _ => 0.0,
         })
         .collect()
 }
@@ -147,7 +145,9 @@ fn bench_akp_numeric(c: &mut Criterion) {
         group_kp.bench_function(format!("sequential_{}", n_roots), |b| {
             b.iter_batched(
                 || make_users_kp(n_roots),
-                |roots| run_numeric_sequential(black_box(&roots), black_box(score_numeric_kp.as_ref())),
+                |roots| {
+                    run_numeric_sequential(black_box(&roots), black_box(score_numeric_kp.as_ref()))
+                },
                 BatchSize::SmallInput,
             );
         });
@@ -164,7 +164,13 @@ fn bench_akp_numeric(c: &mut Criterion) {
             group_kp.bench_function(format!("gpu_{}", n_roots), |b| {
                 b.iter_batched(
                     || make_users_kp(n_roots),
-                    |roots| run_numeric_gpu(black_box(&roots), black_box(score_numeric_kp.as_ref()), ctx),
+                    |roots| {
+                        run_numeric_gpu(
+                            black_box(&roots),
+                            black_box(score_numeric_kp.as_ref()),
+                            ctx,
+                        )
+                    },
                     BatchSize::SmallInput,
                 );
             });

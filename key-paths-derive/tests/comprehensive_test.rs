@@ -2,8 +2,8 @@ use key_paths_derive::Kp;
 use rust_key_paths::{KpType, LockKp};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
 
 // Test collections
 #[derive(Kp)]
@@ -168,7 +168,10 @@ fn test_cow_access() {
     assert_eq!(cow_owned_kp.get(&data).map(|s| s.as_str()), Some("owned"));
 
     let cow_borrowed_kp = WithCow::cow_borrowed();
-    assert_eq!(cow_borrowed_kp.get(&data).map(|s| s.as_str()), Some("borrowed"));
+    assert_eq!(
+        cow_borrowed_kp.get(&data).map(|s| s.as_str()),
+        Some("borrowed")
+    );
 
     let opt_cow_kp = WithCow::opt_cow();
     assert_eq!(opt_cow_kp.get(&data).map(|s| s.as_str()), Some("optional"));
@@ -183,12 +186,19 @@ fn test_cow_mutable() {
     };
 
     let cow_owned_kp = WithCow::cow_owned();
-    cow_owned_kp.get_mut(&mut data).map(|s| s.make_ascii_uppercase());
+    cow_owned_kp
+        .get_mut(&mut data)
+        .map(|s| s.make_ascii_uppercase());
     assert_eq!(data.cow_owned.as_str(), "ORIGINAL");
 
     let opt_cow_kp = WithCow::opt_cow();
-    opt_cow_kp.get_mut(&mut data).map(|s| s.make_ascii_uppercase());
-    assert_eq!(data.opt_cow.as_ref().map(|c| c.as_str()), Some("OPT_ORIGINAL"));
+    opt_cow_kp
+        .get_mut(&mut data)
+        .map(|s| s.make_ascii_uppercase());
+    assert_eq!(
+        data.opt_cow.as_ref().map(|c| c.as_str()),
+        Some("OPT_ORIGINAL")
+    );
 }
 
 #[test]
@@ -201,7 +211,10 @@ fn test_atomic_types() {
     let counter_kp = WithAtomics::counter();
     let atomic = counter_kp.get(&data).unwrap();
     assert_eq!(atomic.load(Ordering::SeqCst), 42);
-    counter_kp.get_mut(&mut data).unwrap().store(100, Ordering::SeqCst);
+    counter_kp
+        .get_mut(&mut data)
+        .unwrap()
+        .store(100, Ordering::SeqCst);
     assert_eq!(data.counter.load(Ordering::SeqCst), 100);
 
     let flags_kp = WithAtomics::flags();
@@ -247,7 +260,10 @@ fn test_hashmap_at() {
     let kp = WithMaps::users_at("alice".to_string());
     assert_eq!(kp.get(&data), Some(&100));
 
-    let mut data_mut = WithMaps { users, cache: BTreeMap::new() };
+    let mut data_mut = WithMaps {
+        users,
+        cache: BTreeMap::new(),
+    };
     let kp_mut = WithMaps::users_at("alice".to_string());
     *kp_mut.get_mut(&mut data_mut).unwrap() = 150;
     assert_eq!(data_mut.users.get("alice"), Some(&150));
@@ -266,7 +282,10 @@ fn test_btreemap_at() {
     let kp = WithMaps::cache_at(1);
     assert_eq!(kp.get(&data), Some(&"one".to_string()));
 
-    let mut data_mut = WithMaps { users: HashMap::new(), cache };
+    let mut data_mut = WithMaps {
+        users: HashMap::new(),
+        cache,
+    };
     let kp_mut = WithMaps::cache_at(1);
     *kp_mut.get_mut(&mut data_mut).unwrap() = "1".to_string();
     assert_eq!(data_mut.cache.get(&1), Some(&"1".to_string()));
@@ -392,7 +411,7 @@ fn test_std_mutex_with_lockkp() {
     // rwlock_kp.get()
     // rwlock_kp.sync_get(&locks).unwrap();
     // rwlock_kp.sync_get_mut()
-    
+
     // Create LockKp for accessing the inner value
     let next: KpType<i32, i32> = rust_key_paths::Kp::new(|i: &i32| Some(i), |i: &mut i32| Some(i));
 

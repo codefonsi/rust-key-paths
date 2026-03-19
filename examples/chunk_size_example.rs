@@ -26,7 +26,10 @@ fn main() {
     let chunk = ChunkSizeOptimizer::auto_detect(&data, 500, |&x| {
         let _ = x + 1;
     });
-    println!("auto_detect (cheap work, sample 500): chunk_size = {}", chunk);
+    println!(
+        "auto_detect (cheap work, sample 500): chunk_size = {}",
+        chunk
+    );
 
     // Use a chosen chunk size in par_chunks
     let chunk_size = ChunkSizeOptimizer::uniform(data.len(), n);

@@ -28,7 +28,9 @@ mod sealed {
 /// Marker + helper for types that map to a WGSL scalar.
 ///
 /// Implement this for your own `#[repr(C)]` newtypes if needed.
-pub trait GpuCompatible: sealed::Sealed + bytemuck::Pod + bytemuck::Zeroable + Copy + 'static {
+pub trait GpuCompatible:
+    sealed::Sealed + bytemuck::Pod + bytemuck::Zeroable + Copy + 'static
+{
     /// WGSL type name: `"f32"`, `"u32"`, `"i32"`.
     fn wgsl_type() -> &'static str;
 }
@@ -108,11 +110,7 @@ where
 {
     /// Compose: apply `next` kernel *after* `self` kernel.
     pub fn and_then_gpu(self, next_kernel: impl Into<String>) -> GpuKp<R, V, E, I> {
-        let combined = format!(
-            "{}\n    {}",
-            self.kernel.wgsl_statement,
-            next_kernel.into()
-        );
+        let combined = format!("{}\n    {}", self.kernel.wgsl_statement, next_kernel.into());
         GpuKp {
             kernel: GpuKernel::new(combined),
             extractor: self.extractor,
@@ -166,10 +164,15 @@ where
 /// GPU extensions for [`KpType`]; mirrors `.map()` / `.filter()` but produces [`GpuKp`].
 pub trait KpGpuExt<R: 'static, V: GpuCompatible> {
     /// Lift `self` into a `GpuKp` with an identity (pass-through) kernel.
-    fn into_gpu(self) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync>;
+    fn into_gpu(
+        self,
+    ) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync>;
 
     /// Attach a WGSL element-wise transform, producing a `GpuKp` (static dispatch).
-    fn map_gpu(self, wgsl_statement: impl Into<String>) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync>;
+    fn map_gpu(
+        self,
+        wgsl_statement: impl Into<String>,
+    ) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync>;
 
     /// Run `self` across a `roots` slice: one GPU dispatch, transformed results.
     fn par_gpu(
@@ -185,11 +188,16 @@ where
     R: 'static,
     V: GpuCompatible,
 {
-    fn into_gpu(self) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync> {
+    fn into_gpu(
+        self,
+    ) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync> {
         self.map_gpu("output[id] = input[id];")
     }
 
-    fn map_gpu(self, wgsl_statement: impl Into<String>) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync> {
+    fn map_gpu(
+        self,
+        wgsl_statement: impl Into<String>,
+    ) -> GpuKp<R, V, impl Fn(&R) -> Option<V> + Send + Sync, impl Fn(&mut R, V) + Send + Sync> {
         let kp = Arc::new(self);
         GpuKp {
             extractor: {
@@ -260,11 +268,7 @@ where
 
     /// Chain another WGSL statement.
     pub fn and_then_gpu(self, next_kernel: impl Into<String>) -> GpuKpVec<R, V, E, I> {
-        let combined = format!(
-            "{}\n    {}",
-            self.kernel.wgsl_statement,
-            next_kernel.into()
-        );
+        let combined = format!("{}\n    {}", self.kernel.wgsl_statement, next_kernel.into());
         GpuKpVec {
             kernel: GpuKernel::new(combined),
             extractor: self.extractor,
@@ -278,7 +282,15 @@ where
 /// GPU extensions for keypaths whose **value type is `Vec<V>`**.
 pub trait KpGpuVecExt<R: 'static, V: GpuCompatible> {
     /// Attach an element-wise WGSL transform over the vector (static dispatch).
-    fn map_gpu_vec(self, wgsl_statement: impl Into<String>) -> GpuKpVec<R, V, impl Fn(&R) -> Option<Vec<V>> + Send + Sync, impl Fn(&mut R, Vec<V>) + Send + Sync>;
+    fn map_gpu_vec(
+        self,
+        wgsl_statement: impl Into<String>,
+    ) -> GpuKpVec<
+        R,
+        V,
+        impl Fn(&R) -> Option<Vec<V>> + Send + Sync,
+        impl Fn(&mut R, Vec<V>) + Send + Sync,
+    >;
 }
 
 impl<R, V> KpGpuVecExt<R, V> for KpType<'static, R, Vec<V>>
@@ -286,7 +298,15 @@ where
     R: 'static,
     V: GpuCompatible,
 {
-    fn map_gpu_vec(self, wgsl_statement: impl Into<String>) -> GpuKpVec<R, V, impl Fn(&R) -> Option<Vec<V>> + Send + Sync, impl Fn(&mut R, Vec<V>) + Send + Sync> {
+    fn map_gpu_vec(
+        self,
+        wgsl_statement: impl Into<String>,
+    ) -> GpuKpVec<
+        R,
+        V,
+        impl Fn(&R) -> Option<Vec<V>> + Send + Sync,
+        impl Fn(&mut R, Vec<V>) + Send + Sync,
+    > {
         let kp = Arc::new(self);
         GpuKpVec {
             extractor: {
@@ -348,8 +368,7 @@ where
         (Some(a), Some(b)) => {
             let merged_kernel = format!(
                 "if (id == 0u) {{ {} }} else {{ {} }}",
-                kp_a.kernel.wgsl_statement,
-                kp_b.kernel.wgsl_statement,
+                kp_a.kernel.wgsl_statement, kp_b.kernel.wgsl_statement,
             );
             let merged = GpuKernel::new(merged_kernel);
             let results = ctx.dispatch_scalar::<V>(&[a, b], &merged).ok();
@@ -640,49 +659,57 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
             body = kernel.wgsl_statement,
         );
 
-        let module = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("gkp_shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_src)),
-        });
+        let module = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("gkp_shader"),
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_src)),
+            });
 
-        let bgl = self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+        let bgl = self
+            .device
+            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-            ],
-        });
+                ],
+            });
 
-        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        });
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[&bgl],
+                push_constant_ranges: &[],
+            });
 
-        let pipeline = self.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &module,
-            entry_point: "main",
-        });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: "main",
+            });
 
         let readback_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("gkp_rb"),
@@ -701,11 +728,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {{
             let chunk_size = (chunk_len * elem_size) as u64;
             let workgroups = (chunk_len as u32 + ws - 1) / ws;
 
-            let input_buf = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("gkp_in"),
-                contents: bytemuck::cast_slice(&values[offset..offset + chunk_len]),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            });
+            let input_buf = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("gkp_in"),
+                    contents: bytemuck::cast_slice(&values[offset..offset + chunk_len]),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
             let output_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("gkp_out"),
                 size: chunk_size,

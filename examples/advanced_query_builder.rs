@@ -15,9 +15,9 @@
 
 // use rust_keypaths::{KeyPath, OptionalKeyPath, WritableKeyPath, WritableOptionalKeyPath};
 // use keypaths_proc::Kp;
-use std::collections::HashMap;
 use key_paths_derive::Kp;
 use rust_key_paths::KpType;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Kp)]
 struct Product {
@@ -52,7 +52,11 @@ where
     }
 
     // Add a filter predicate (KpType::get returns Option<&F>); KpType = fn pointers, no heap/dynamic dispatch
-    fn where_<F>(mut self, path: KpType<'static, T, F>, predicate: impl Fn(&F) -> bool + 'static) -> Self
+    fn where_<F>(
+        mut self,
+        path: KpType<'static, T, F>,
+        predicate: impl Fn(&F) -> bool + 'static,
+    ) -> Self
     where
         F: 'static,
     {
@@ -64,7 +68,10 @@ where
 
     // Execute and get all matching items
     fn all(&self) -> Vec<&T> {
-        self.data.iter().filter(|item| self.apply_filters(item)).collect()
+        self.data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .collect()
     }
 
     // Get first matching item
@@ -74,7 +81,10 @@ where
 
     // Count matching items
     fn count(&self) -> usize {
-        self.data.iter().filter(|item| self.apply_filters(item)).count()
+        self.data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .count()
     }
 
     // Limit results
@@ -99,7 +109,11 @@ where
     where
         F: Ord + 'static,
     {
-        let mut results: Vec<&T> = self.data.iter().filter(|item| self.apply_filters(item)).collect();
+        let mut results: Vec<&T> = self
+            .data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .collect();
         results.sort_by(|a, b| path.get(*a).cmp(&path.get(*b)));
         results
     }
@@ -109,29 +123,45 @@ where
     where
         F: Ord + 'static,
     {
-        let mut results: Vec<&T> = self.data.iter().filter(|item| self.apply_filters(item)).collect();
+        let mut results: Vec<&T> = self
+            .data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .collect();
         results.sort_by(|a, b| path.get(*b).cmp(&path.get(*a)));
         results
     }
 
     // Order by a float field (ascending) - for f64
     fn order_by_float(&self, path: KpType<'static, T, f64>) -> Vec<&'a T> {
-        let mut results: Vec<&T> = self.data.iter().filter(|item| self.apply_filters(item)).collect();
+        let mut results: Vec<&T> = self
+            .data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .collect();
         results.sort_by(|a, b| {
             let a_val = path.get(*a).copied().unwrap_or(0.0);
             let b_val = path.get(*b).copied().unwrap_or(0.0);
-            a_val.partial_cmp(&b_val).unwrap_or(std::cmp::Ordering::Equal)
+            a_val
+                .partial_cmp(&b_val)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         results
     }
 
     // Order by a float field (descending) - for f64
     fn order_by_float_desc(&self, path: KpType<'static, T, f64>) -> Vec<&'a T> {
-        let mut results: Vec<&T> = self.data.iter().filter(|item| self.apply_filters(item)).collect();
+        let mut results: Vec<&T> = self
+            .data
+            .iter()
+            .filter(|item| self.apply_filters(item))
+            .collect();
         results.sort_by(|a, b| {
             let a_val = path.get(*a).copied().unwrap_or(0.0);
             let b_val = path.get(*b).copied().unwrap_or(0.0);
-            b_val.partial_cmp(&a_val).unwrap_or(std::cmp::Ordering::Equal)
+            b_val
+                .partial_cmp(&a_val)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         results
     }
@@ -396,20 +426,13 @@ fn main() {
     );
     println!(
         "  Min Price: ${:.2}",
-        electronics_query
-            .min_float(Product::price())
-            .unwrap_or(0.0)
+        electronics_query.min_float(Product::price()).unwrap_or(0.0)
     );
     println!(
         "  Max Price: ${:.2}",
-        electronics_query
-            .max_float(Product::price())
-            .unwrap_or(0.0)
+        electronics_query.max_float(Product::price()).unwrap_or(0.0)
     );
-    println!(
-        "  Total Stock: {}",
-        electronics_query.sum(Product::stock())
-    );
+    println!("  Total Stock: {}", electronics_query.sum(Product::stock()));
 
     // Query 6: Complex filtering with ordering
     println!("\n--- Query 6: Electronics Under $200, Ordered by Rating ---");

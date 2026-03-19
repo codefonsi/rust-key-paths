@@ -57,7 +57,10 @@ fn main() {
             .set(&*bank1, |acc| acc.balance += balance1)
             .unwrap();
         let acc2_bal = Bank::account2_lock().get(&*bank1).unwrap().balance;
-        println!("  Thread 1: Transfer 1->2 done, acc2.balance = {}", acc2_bal);
+        println!(
+            "  Thread 1: Transfer 1->2 done, acc2.balance = {}",
+            acc2_bal
+        );
     });
 
     let handle2 = thread::spawn(move || {
@@ -70,7 +73,10 @@ fn main() {
             .set(&*bank2, |acc| acc.balance += balance2)
             .unwrap();
         let acc1_bal = Bank::account1_lock().get(&*bank2).unwrap().balance;
-        println!("  Thread 2: Transfer 2->1 done, acc1.balance = {}", acc1_bal);
+        println!(
+            "  Thread 2: Transfer 2->1 done, acc1.balance = {}",
+            acc1_bal
+        );
     });
 
     handle1.join().unwrap();
@@ -87,11 +93,19 @@ fn main() {
         let id1 = Bank::account1_lock().get(&*bank3).unwrap().id;
         let id2 = Bank::account2_lock().get(&*bank3).unwrap().id;
         if id1 < id2 {
-            Bank::account1_lock().set(&*bank3, |acc| acc.balance += 10).unwrap();
-            Bank::account2_lock().set(&*bank3, |acc| acc.balance -= 10).unwrap();
+            Bank::account1_lock()
+                .set(&*bank3, |acc| acc.balance += 10)
+                .unwrap();
+            Bank::account2_lock()
+                .set(&*bank3, |acc| acc.balance -= 10)
+                .unwrap();
         } else {
-            Bank::account2_lock().set(&*bank3, |acc| acc.balance -= 10).unwrap();
-            Bank::account1_lock().set(&*bank3, |acc| acc.balance += 10).unwrap();
+            Bank::account2_lock()
+                .set(&*bank3, |acc| acc.balance -= 10)
+                .unwrap();
+            Bank::account1_lock()
+                .set(&*bank3, |acc| acc.balance += 10)
+                .unwrap();
         }
         println!("  Thread 3: Ordered transfer done");
     });
@@ -100,11 +114,19 @@ fn main() {
         let id1 = Bank::account1_lock().get(&*bank4).unwrap().id;
         let id2 = Bank::account2_lock().get(&*bank4).unwrap().id;
         if id1 < id2 {
-            Bank::account1_lock().set(&*bank4, |acc| acc.balance -= 5).unwrap();
-            Bank::account2_lock().set(&*bank4, |acc| acc.balance += 5).unwrap();
+            Bank::account1_lock()
+                .set(&*bank4, |acc| acc.balance -= 5)
+                .unwrap();
+            Bank::account2_lock()
+                .set(&*bank4, |acc| acc.balance += 5)
+                .unwrap();
         } else {
-            Bank::account2_lock().set(&*bank4, |acc| acc.balance += 5).unwrap();
-            Bank::account1_lock().set(&*bank4, |acc| acc.balance -= 5).unwrap();
+            Bank::account2_lock()
+                .set(&*bank4, |acc| acc.balance += 5)
+                .unwrap();
+            Bank::account1_lock()
+                .set(&*bank4, |acc| acc.balance -= 5)
+                .unwrap();
         }
         println!("  Thread 4: Ordered transfer done");
     });

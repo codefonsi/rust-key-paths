@@ -1,7 +1,7 @@
+use key_paths_derive::Kp;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
 use std::rc::Rc;
 use std::sync::Arc;
-use key_paths_derive::Kp;
 
 #[derive(Debug, Kp)]
 struct ComprehensiveTest {

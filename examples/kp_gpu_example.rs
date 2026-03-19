@@ -36,15 +36,22 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("score * 2 + 1 = {:?}", result); // Some(85.0)
 
     // Chain with .and_then_gpu()
-    let gpu_score2 = User::score().map_gpu("output[id] = input[id] * 2.0;")
+    let gpu_score2 = User::score()
+        .map_gpu("output[id] = input[id] * 2.0;")
         .and_then_gpu("output[id] = output[id] + 1.0;");
     let result2 = gpu_score2.run_one(&user, &ctx);
     println!("(score * 2) + 1 = {:?}", result2);
 
     // .par_gpu: one call to attach kernel and run over a slice
     let users = vec![
-        User { score: 1.0, age: 20 },
-        User { score: 2.0, age: 25 },
+        User {
+            score: 1.0,
+            age: 20,
+        },
+        User {
+            score: 2.0,
+            age: 25,
+        },
     ];
     let results: Vec<Option<f32>> =
         User::score().par_gpu("output[id] = input[id] * 3.0;", &users, &ctx);

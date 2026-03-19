@@ -41,7 +41,9 @@ pub struct KpBuilder<T> {
 
 impl<T: Default> KpBuilder<T> {
     pub fn new() -> Self {
-        Self { value: T::default() }
+        Self {
+            value: T::default(),
+        }
     }
 
     pub fn set<V>(mut self, kp: impl Fn(&mut T) -> Option<&mut V>, value: V) -> Self

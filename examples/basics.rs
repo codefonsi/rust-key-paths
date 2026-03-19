@@ -6,11 +6,7 @@ use key_paths_derive::Kp;
 use rust_key_paths::{Kp, KpDynamic, KpType};
 
 pub struct Service {
-    rect_to_width_kp: KpDynamic<
-        Rectangle,
-        u32,
-    >,
-
+    rect_to_width_kp: KpDynamic<Rectangle, u32>,
 }
 
 // impl Service {
@@ -20,7 +16,6 @@ pub struct Service {
 //         }
 //     }
 // }
-
 
 #[derive(Debug, Kp)]
 struct Size {
@@ -49,7 +44,6 @@ impl Rectangle {
     //     Kp::new_const(g, s)
     // }
 }
-
 
 fn main() {
     let mut rect = Rectangle {

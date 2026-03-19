@@ -64,8 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let mc_option = MonteCarloOption { payoffs };
 
-    let gpu_payoffs = MonteCarloOption::payoffs()
-        .map_gpu_vec("output[id] = max(0.0, input[id]);"); // ensure non-negative payoffs
+    let gpu_payoffs = MonteCarloOption::payoffs().map_gpu_vec("output[id] = max(0.0, input[id]);"); // ensure non-negative payoffs
 
     let t0 = Instant::now();
     let capped = gpu_payoffs.run_one(&mc_option, &ctx).unwrap_or_default();
@@ -78,7 +77,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     };
 
     println!("1. Monte Carlo option ({} paths)", N_PATHS);
-    println!("   GPU: max(0, payoff) over all paths → option value = {:.6}", option_value);
+    println!(
+        "   GPU: max(0, payoff) over all paths → option value = {:.6}",
+        option_value
+    );
     println!("   Dispatch + readback: {:.2} ms\n", gpu_ms);
 
     // ─── 2. Batch of options: intrinsic value for many contracts ───────────────
@@ -95,8 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         })
         .collect();
 
-    let gpu_intrinsic =
-        OptionContract::intrinsic().map_gpu("output[id] = max(0.0, input[id]);");
+    let gpu_intrinsic = OptionContract::intrinsic().map_gpu("output[id] = max(0.0, input[id]);");
     let t1 = Instant::now();
     let intrinsics: Vec<Option<f32>> = gpu_intrinsic.run_many(&options, &ctx);
     let batch_ms = t1.elapsed().as_secs_f64() * 1000.0;
@@ -106,7 +107,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     println!("2. Batch option intrinsics ({} contracts)", N_OPTIONS);
     println!("   One GPU dispatch: max(0, spot - strike) for all");
-    println!("   Total intrinsic: {:.2}, ITM count: {}", total_intrinsic, in_the_money);
+    println!(
+        "   Total intrinsic: {:.2}, ITM count: {}",
+        total_intrinsic, in_the_money
+    );
     println!("   Time: {:.2} ms\n", batch_ms);
 
     // ─── 3. Portfolio stress: factor sensitivities × shock ─────────────────────
@@ -119,10 +123,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .collect();
 
     let portfolio = RiskPosition { sensitivities };
-    let gpu_stress = RiskPosition::sensitivities().map_gpu_vec(format!(
-        "output[id] = input[id] * {:.1};",
-        STRESS_FACTOR
-    ));
+    let gpu_stress = RiskPosition::sensitivities()
+        .map_gpu_vec(format!("output[id] = input[id] * {:.1};", STRESS_FACTOR));
 
     let t2 = Instant::now();
     let stressed = gpu_stress.run_one(&portfolio, &ctx).unwrap_or_default();
@@ -130,14 +132,25 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let total_stressed_pnl: f32 = stressed.iter().sum();
 
-    println!("3. Portfolio stress test ({} positions × {} factors = {} values)",
-        N_POSITIONS, N_FACTORS, N_POSITIONS * N_FACTORS);
-    println!("   GPU: sensitivities × {:.1} in one dispatch", STRESS_FACTOR);
+    println!(
+        "3. Portfolio stress test ({} positions × {} factors = {} values)",
+        N_POSITIONS,
+        N_FACTORS,
+        N_POSITIONS * N_FACTORS
+    );
+    println!(
+        "   GPU: sensitivities × {:.1} in one dispatch",
+        STRESS_FACTOR
+    );
     println!("   Total stressed PnL (sum): {:.2}", total_stressed_pnl);
     println!("   Time: {:.2} ms\n", stress_ms);
 
-    println!("═══ Done: GPU handled {} + {} + {} elements in 3 dispatches ═══",
-        N_PATHS, N_OPTIONS, N_POSITIONS * N_FACTORS);
+    println!(
+        "═══ Done: GPU handled {} + {} + {} elements in 3 dispatches ═══",
+        N_PATHS,
+        N_OPTIONS,
+        N_POSITIONS * N_FACTORS
+    );
 
     Ok(())
 }

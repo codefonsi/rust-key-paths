@@ -11,7 +11,7 @@
 
 use key_paths_derive::Kp;
 use std::sync::Arc;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 #[derive(Clone, Kp)]
 struct Account {
@@ -143,14 +143,8 @@ async fn main() {
     let bank5 = bank.clone();
 
     let handle5 = tokio::spawn(async move {
-        let b1 = Bank::account1_async()
-            .get(&*bank5)
-            .await
-            .map(|a| a.balance);
-        let b2 = Bank::account2_async()
-            .get(&*bank5)
-            .await
-            .map(|a| a.balance);
+        let b1 = Bank::account1_async().get(&*bank5).await.map(|a| a.balance);
+        let b2 = Bank::account2_async().get(&*bank5).await.map(|a| a.balance);
         if let (Some(b1), Some(b2)) = (b1, b2) {
             println!("  Task 5: Snapshot acc1={}, acc2={}", b1, b2);
             Bank::account2_async()

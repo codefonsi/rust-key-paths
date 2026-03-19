@@ -7,9 +7,9 @@
 //! - Keypath approach: Kp.then_async(AsyncLockKp).then().then() chain
 //! - Direct lock approach: tokio_mutex.lock().await, then access leaf
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rust_key_paths::async_lock::{AsyncLockKp, TokioMutexAccess};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rust_key_paths::Kp;
+use rust_key_paths::async_lock::{AsyncLockKp, TokioMutexAccess};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
@@ -59,11 +59,10 @@ fn build_and_get<'a>(root: &'a Root, rt: &Runtime) -> Option<&'a i32> {
     );
     let async_l1 = AsyncLockKp::new(prev, TokioMutexAccess::new(), next);
 
-    let kp_root_to_lock: rust_key_paths::KpType<Root, Arc<tokio::sync::Mutex<Level1>>> =
-        Kp::new(
-            |r: &Root| Some(&r.tokio_mutex),
-            |r: &mut Root| Some(&mut r.tokio_mutex),
-        );
+    let kp_root_to_lock: rust_key_paths::KpType<Root, Arc<tokio::sync::Mutex<Level1>>> = Kp::new(
+        |r: &Root| Some(&r.tokio_mutex),
+        |r: &mut Root| Some(&mut r.tokio_mutex),
+    );
 
     let step1 = kp_root_to_lock.then_async(async_l1);
     rt.block_on(step1.get(root))
@@ -81,11 +80,10 @@ fn build_and_get_mut<'a>(root: &'a mut Root, rt: &Runtime) -> Option<&'a mut i32
     );
     let async_l1 = AsyncLockKp::new(prev, TokioMutexAccess::new(), next);
 
-    let kp_root_to_lock: rust_key_paths::KpType<Root, Arc<tokio::sync::Mutex<Level1>>> =
-        Kp::new(
-            |r: &Root| Some(&r.tokio_mutex),
-            |r: &mut Root| Some(&mut r.tokio_mutex),
-        );
+    let kp_root_to_lock: rust_key_paths::KpType<Root, Arc<tokio::sync::Mutex<Level1>>> = Kp::new(
+        |r: &Root| Some(&r.tokio_mutex),
+        |r: &mut Root| Some(&mut r.tokio_mutex),
+    );
 
     let step1 = kp_root_to_lock.then_async(async_l1);
     rt.block_on(step1.get_mut(root))

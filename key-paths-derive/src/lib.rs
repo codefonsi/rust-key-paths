@@ -144,10 +144,7 @@ fn is_tokio_sync_type(path: &syn::Path) -> bool {
 /// Helper function to check if a type path is under parking_lot (RwLock/Mutex from lock_api).
 /// Use so we never treat parking_lot::RwLock as std::sync::RwLock.
 fn is_parking_lot_type(path: &syn::Path) -> bool {
-    path.segments
-        .first()
-        .map(|s| s.ident == "parking_lot")
-        == Some(true)
+    path.segments.first().map(|s| s.ident == "parking_lot") == Some(true)
 }
 
 /// Helper function to check if a type path is under std::sync::atomic (strict prefix).
@@ -161,8 +158,19 @@ fn is_std_sync_atomic_type(path: &syn::Path) -> bool {
 
 /// Atomic type idents (no type params): AtomicBool, AtomicI8, etc.
 const ATOMIC_TYPE_IDENTS: &[&str] = &[
-    "AtomicBool", "AtomicI8", "AtomicI16", "AtomicI32", "AtomicI64", "AtomicI128", "AtomicIsize",
-    "AtomicU8", "AtomicU16", "AtomicU32", "AtomicU64", "AtomicU128", "AtomicUsize",
+    "AtomicBool",
+    "AtomicI8",
+    "AtomicI16",
+    "AtomicI32",
+    "AtomicI64",
+    "AtomicI128",
+    "AtomicIsize",
+    "AtomicU8",
+    "AtomicU16",
+    "AtomicU32",
+    "AtomicU64",
+    "AtomicU128",
+    "AtomicUsize",
 ];
 
 fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
@@ -457,14 +465,22 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                                     "Weak" => (WrapperKind::Weak, Some(inner.clone())),
                                     "Tagged" => (WrapperKind::Tagged, Some(inner.clone())),
                                     "Cow" => (WrapperKind::Cow, Some(inner.clone())),
-                                    "AtomicPtr" if is_std_sync_atomic_type(&tp.path) => (WrapperKind::Atomic, None),
+                                    "AtomicPtr" if is_std_sync_atomic_type(&tp.path) => {
+                                        (WrapperKind::Atomic, None)
+                                    }
                                     "Pin" => (WrapperKind::Pin, Some(inner.clone())),
                                     "Cell" => (WrapperKind::Cell, Some(inner.clone())),
                                     "RefCell" => (WrapperKind::RefCell, Some(inner.clone())),
-                                    "OnceCell" | "OnceLock" => (WrapperKind::OnceCell, Some(inner.clone())),
+                                    "OnceCell" | "OnceLock" => {
+                                        (WrapperKind::OnceCell, Some(inner.clone()))
+                                    }
                                     "Lazy" | "LazyLock" => (WrapperKind::Lazy, Some(inner.clone())),
-                                    "PhantomData" => (WrapperKind::PhantomData, Some(inner.clone())),
-                                    "Range" | "RangeInclusive" => (WrapperKind::Range, Some(inner.clone())),
+                                    "PhantomData" => {
+                                        (WrapperKind::PhantomData, Some(inner.clone()))
+                                    }
+                                    "Range" | "RangeInclusive" => {
+                                        (WrapperKind::Range, Some(inner.clone()))
+                                    }
                                     _ => (WrapperKind::None, None),
                                 };
                             }
@@ -490,9 +506,10 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
 
 /// Check if a field has the #[pin] attribute (pin_project pattern).
 fn field_has_pin_attr(field: &syn::Field) -> bool {
-    field.attrs.iter().any(|attr| {
-        attr.path().get_ident().map(|i| i == "pin").unwrap_or(false)
-    })
+    field
+        .attrs
+        .iter()
+        .any(|attr| attr.path().get_ident().map(|i| i == "pin").unwrap_or(false))
 }
 
 /// Check if a type is a Future (dyn Future, impl Future, or Box<dyn Future>).
@@ -502,7 +519,9 @@ fn is_future_type(ty: &Type) -> bool {
     match ty {
         Type::TraitObject(trait_obj) => trait_obj.bounds.iter().any(|b| {
             if let TypeParamBound::Trait(t) = b {
-                t.path.segments.last()
+                t.path
+                    .segments
+                    .last()
                     .map(|s| s.ident == "Future")
                     .unwrap_or(false)
             } else {
@@ -511,7 +530,9 @@ fn is_future_type(ty: &Type) -> bool {
         }),
         Type::ImplTrait(impl_trait) => impl_trait.bounds.iter().any(|b| {
             if let TypeParamBound::Trait(t) = b {
-                t.path.segments.last()
+                t.path
+                    .segments
+                    .last()
                     .map(|s| s.ident == "Future")
                     .unwrap_or(false)
             } else {
@@ -619,12 +640,12 @@ fn to_snake_case(name: &str) -> String {
 }
 
 /// Derive macro for generating simple keypath methods.
-/// 
+///
 /// Generates one method per field: `StructName::field_name()` that returns a `Kp`.
 /// Intelligently handles wrapper types (Option, Vec, Box, Arc, etc.) to generate appropriate keypaths.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```ignore
 /// #[derive(Kp)]
 /// struct Person {
@@ -633,7 +654,7 @@ fn to_snake_case(name: &str) -> String {
 ///     email: Option<String>,
 ///     addresses: Vec<String>,
 /// }
-/// 
+///
 /// // Generates:
 /// // impl Person {
 /// //     pub fn name() -> Kp<...> { ... }
@@ -686,7 +707,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                     //     )
                     // }
                 });
-                
+
                 // When struct has #[pin] fields, generated code calls this.project() which must
                 // be provided by #[pin_project]. If missing, user gets: no method named `project`.
 
@@ -838,7 +859,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 });
                             }
                         }
-                        (WrapperKind::BTreeMap, Some(inner_ty)) | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeMap, Some(inner_ty))
+                        | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
                             if let Some((key_ty, _)) = extract_map_key_value(ty) {
                                 tokens.extend(quote! {
                                     #[inline(always)]
@@ -1076,7 +1098,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::OptionCow, Some(inner_ty)) => {
                             // For Option<Cow<'_, B>>
                             tokens.extend(quote! {
@@ -1113,7 +1135,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::HashSet, Some(inner_ty)) | (WrapperKind::HashSetOption, Some(inner_ty)) => {
+                        (WrapperKind::HashSet, Some(inner_ty))
+                        | (WrapperKind::HashSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("{}_at", field_ident);
 
                             tokens.extend(quote! {
@@ -1139,7 +1162,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BTreeSet, Some(inner_ty)) | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeSet, Some(inner_ty))
+                        | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("{}_at", field_ident);
 
                             tokens.extend(quote! {
@@ -1165,7 +1189,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::VecDeque, Some(inner_ty)) | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
+                        (WrapperKind::VecDeque, Some(inner_ty))
+                        | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1183,7 +1208,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::LinkedList, Some(_inner_ty)) | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
+                        (WrapperKind::LinkedList, Some(_inner_ty))
+                        | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1194,7 +1220,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BinaryHeap, Some(_inner_ty)) | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
+                        (WrapperKind::BinaryHeap, Some(_inner_ty))
+                        | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1981,7 +2008,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         }
                     }
                 }
-                
+
                 tokens
             }
             Fields::Unnamed(unnamed) => {
@@ -2144,7 +2171,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 });
                             }
                         }
-                        (WrapperKind::BTreeMap, Some(inner_ty)) | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeMap, Some(inner_ty))
+                        | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
                             if let Some((key_ty, _)) = extract_map_key_value(ty) {
                                 tokens.extend(quote! {
                                     #[inline(always)]
@@ -2287,7 +2315,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::Cow, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
@@ -2299,7 +2327,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::OptionCow, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
@@ -2333,7 +2361,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::HashSet, Some(inner_ty)) | (WrapperKind::HashSetOption, Some(inner_ty)) => {
+                        (WrapperKind::HashSet, Some(inner_ty))
+                        | (WrapperKind::HashSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("f{}_at", idx);
 
                             tokens.extend(quote! {
@@ -2359,7 +2388,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BTreeSet, Some(inner_ty)) | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeSet, Some(inner_ty))
+                        | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("f{}_at", idx);
 
                             tokens.extend(quote! {
@@ -2385,7 +2415,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::VecDeque, Some(inner_ty)) | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
+                        (WrapperKind::VecDeque, Some(inner_ty))
+                        | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2403,7 +2434,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::LinkedList, Some(_inner_ty)) | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
+                        (WrapperKind::LinkedList, Some(_inner_ty))
+                        | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2414,7 +2446,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BinaryHeap, Some(_inner_ty)) | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
+                        (WrapperKind::BinaryHeap, Some(_inner_ty))
+                        | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2803,10 +2836,13 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::Cell, Some(_inner_ty)) | (WrapperKind::RefCell, Some(_inner_ty))
-                        | (WrapperKind::PhantomData, Some(_inner_ty)) | (WrapperKind::Range, Some(_inner_ty))
+                        (WrapperKind::Cell, Some(_inner_ty))
+                        | (WrapperKind::RefCell, Some(_inner_ty))
+                        | (WrapperKind::PhantomData, Some(_inner_ty))
+                        | (WrapperKind::Range, Some(_inner_ty))
                         | (WrapperKind::OptionCell, Some(_inner_ty))
-                        | (WrapperKind::OptionPhantomData, Some(_inner_ty)) | (WrapperKind::OptionRange, Some(_inner_ty)) => {
+                        | (WrapperKind::OptionPhantomData, Some(_inner_ty))
+                        | (WrapperKind::OptionRange, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                 pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2868,8 +2904,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
             }
             Fields::Unit => {
                 return syn::Error::new(input_span, "Kp derive does not support unit structs")
-                .to_compile_error()
-                .into();
+                    .to_compile_error()
+                    .into();
             }
         },
         Data::Enum(data_enum) => {
@@ -3920,10 +3956,13 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         }
                                     });
                                 }
-                                (WrapperKind::Cell, Some(_inner_ty)) | (WrapperKind::RefCell, Some(_inner_ty))
-                                | (WrapperKind::PhantomData, Some(_inner_ty)) | (WrapperKind::Range, Some(_inner_ty))
+                                (WrapperKind::Cell, Some(_inner_ty))
+                                | (WrapperKind::RefCell, Some(_inner_ty))
+                                | (WrapperKind::PhantomData, Some(_inner_ty))
+                                | (WrapperKind::Range, Some(_inner_ty))
                                 | (WrapperKind::OptionCell, Some(_inner_ty))
-                                | (WrapperKind::OptionPhantomData, Some(_inner_ty)) | (WrapperKind::OptionRange, Some(_inner_ty)) => {
+                                | (WrapperKind::OptionPhantomData, Some(_inner_ty))
+                                | (WrapperKind::OptionRange, Some(_inner_ty)) => {
                                     tokens.extend(quote! {
                                         #[inline(always)]
                                         pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
@@ -4037,8 +4076,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
         }
         Data::Union(_) => {
             return syn::Error::new(input_span, "Kp derive does not support unions")
-            .to_compile_error()
-            .into();
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -4113,12 +4152,9 @@ pub fn derive_partial_keypaths(input: TokenStream) -> TokenStream {
             quote! { #(#calls),* }
         }
         Data::Union(_) => {
-            return syn::Error::new(
-                input.ident.span(),
-                "Pkp derive does not support unions",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(input.ident.span(), "Pkp derive does not support unions")
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -4201,12 +4237,9 @@ pub fn derive_any_keypaths(input: TokenStream) -> TokenStream {
             quote! { #(#calls),* }
         }
         Data::Union(_) => {
-            return syn::Error::new(
-                input.ident.span(),
-                "Akp derive does not support unions",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(input.ident.span(), "Akp derive does not support unions")
+                .to_compile_error()
+                .into();
         }
     };
 

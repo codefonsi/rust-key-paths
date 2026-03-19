@@ -44,7 +44,11 @@ fn main() {
     let employees_kp = Company::employees();
 
     println!("=== key-paths-iter parallel (Kp derive) ===\n");
-    println!("Company: {} ({} employees)\n", company.name, company.employees.len());
+    println!(
+        "Company: {} ({} employees)\n",
+        company.name,
+        company.employees.len()
+    );
 
     // Parallel map: extract salaries
     let salaries = employees_kp.par_map(&company, |e| e.salary);
@@ -56,21 +60,38 @@ fn main() {
 
     // Parallel count by predicate
     let high_earners = employees_kp.par_count_by(&company, |e| e.salary >= 100_000);
-    println!("High earners (salary >= 100k): {} (par_count_by)", high_earners);
+    println!(
+        "High earners (salary >= 100k): {} (par_count_by)",
+        high_earners
+    );
 
     // Parallel any / all
     let has_manager = employees_kp.par_any(&company, |e| e.role == "Manager");
     let all_have_salary = employees_kp.par_all(&company, |e| e.salary > 0);
-    println!("Has manager: {}, all have salary: {} (par_any, par_all)", has_manager, all_have_salary);
+    println!(
+        "Has manager: {}, all have salary: {} (par_any, par_all)",
+        has_manager, all_have_salary
+    );
 
     // Parallel min/max by key
-    let min_sal = employees_kp.par_min_by_key(&company, |e| e.salary).map(|e| e.salary);
-    let max_sal = employees_kp.par_max_by_key(&company, |e| e.salary).map(|e| e.salary);
-    println!("Min salary: {:?}, max salary: {:?} (par_min_by_key, par_max_by_key)", min_sal, max_sal);
+    let min_sal = employees_kp
+        .par_min_by_key(&company, |e| e.salary)
+        .map(|e| e.salary);
+    let max_sal = employees_kp
+        .par_max_by_key(&company, |e| e.salary)
+        .map(|e| e.salary);
+    println!(
+        "Min salary: {:?}, max salary: {:?} (par_min_by_key, par_max_by_key)",
+        min_sal, max_sal
+    );
 
     // Parallel partition: active vs inactive
     let (active, inactive) = employees_kp.par_partition(&company, |e| e.active);
-    println!("Active: {}, inactive: {} (par_partition)", active.len(), inactive.len());
+    println!(
+        "Active: {}, inactive: {} (par_partition)",
+        active.len(),
+        inactive.len()
+    );
 
     // Parallel group by role
     let by_role = employees_kp.par_group_by(&company, |e| e.role.clone());
@@ -81,9 +102,15 @@ fn main() {
 
     // Parallel sort by key (returns owned Vec<Employee>)
     let sorted_by_salary = employees_kp.par_sort_by_key(&company, |e| e.salary);
-    println!("\nSorted by salary (par_sort_by_key): {} items", sorted_by_salary.len());
+    println!(
+        "\nSorted by salary (par_sort_by_key): {} items",
+        sorted_by_salary.len()
+    );
     if let (Some(first), Some(last)) = (sorted_by_salary.first(), sorted_by_salary.last()) {
-        println!("  First: {} ({}), last: {} ({})", first.name, first.salary, last.name, last.salary);
+        println!(
+            "  First: {} ({}), last: {} ({})",
+            first.name, first.salary, last.name, last.salary
+        );
     }
 
     println!("\nDone.");

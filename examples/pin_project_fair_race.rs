@@ -17,7 +17,7 @@ use std::task::{Context, Poll};
 
 use key_paths_derive::Kp;
 use pin_project::pin_project;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
@@ -111,10 +111,7 @@ async fn main() {
     assert_eq!(result2, "A completed");
 
     // Keypath introspection before the race
-    let race3 = FairRaceFuture::new(
-        labeled_sleep(10, "left"),
-        labeled_sleep(20, "right"),
-    );
+    let race3 = FairRaceFuture::new(labeled_sleep(10, "left"), labeled_sleep(20, "right"));
     println!("\n  Before race, fair flag: {:?}", fair_kp.get(&race3));
     let result3 = race3.await;
     println!("  Third race result: {:?}", result3);

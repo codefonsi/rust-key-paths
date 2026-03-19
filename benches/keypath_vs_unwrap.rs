@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use key_paths_derive::Kp;
 use parking_lot::RwLock;
 use std::sync::Arc;

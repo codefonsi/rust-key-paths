@@ -129,7 +129,10 @@ impl AdaptiveThreadPool {
 
     /// Get the pool selected for current load.
     pub fn get_pool(&self) -> Arc<ThreadPool> {
-        let idx = self.current_load.load(Ordering::Relaxed).min(self.pools.len() - 1);
+        let idx = self
+            .current_load
+            .load(Ordering::Relaxed)
+            .min(self.pools.len() - 1);
         Arc::clone(&self.pools[idx])
     }
 
@@ -422,17 +425,23 @@ impl OptimizationGuide {
 
     /// Memory-heavy (large allocations).
     pub fn scientific_computing() -> ThreadPool {
-        RayonConfig::memory_intensive().build().expect("thread pool")
+        RayonConfig::memory_intensive()
+            .build()
+            .expect("thread pool")
     }
 
     /// Low latency (games, trading).
     pub fn real_time() -> ThreadPool {
-        RayonConfig::latency_sensitive().build().expect("thread pool")
+        RayonConfig::latency_sensitive()
+            .build()
+            .expect("thread pool")
     }
 
     /// Physical cores only (e.g. training).
     pub fn machine_learning() -> ThreadPool {
-        RayonConfig::physical_cores_only().build().expect("thread pool")
+        RayonConfig::physical_cores_only()
+            .build()
+            .expect("thread pool")
     }
 }
 

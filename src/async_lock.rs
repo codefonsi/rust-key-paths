@@ -150,25 +150,25 @@ where
 }
 
 impl<
-        R,
-        Lock,
-        Mid,
-        V,
-        Root,
-        LockValue,
-        MidValue,
-        Value,
-        MutRoot,
-        MutLock,
-        MutMid,
-        MutValue,
-        G1,
-        S1,
-        L,
-        G2,
-        S2,
-    >
-    SyncKeyPathLike<Root, Value, MutRoot, MutValue> for crate::lock::LockKp<
+    R,
+    Lock,
+    Mid,
+    V,
+    Root,
+    LockValue,
+    MidValue,
+    Value,
+    MutRoot,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+> SyncKeyPathLike<Root, Value, MutRoot, MutValue>
+    for crate::lock::LockKp<
         R,
         Lock,
         Mid,
@@ -524,8 +524,58 @@ where
         G1,
         S1,
         L,
-        impl Fn(MidValue) -> Option<Value2> + Clone + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
-        impl Fn(MutMid) -> Option<MutValue2> + Clone + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
+        impl Fn(MidValue) -> Option<Value2>
+        + Clone
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
+        impl Fn(MutMid) -> Option<MutValue2>
+        + Clone
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
     >
     where
         V: 'static,
@@ -763,7 +813,25 @@ impl<
     G2,
     S2,
 > AsyncKeyPathLike<Root, MutRoot>
-    for AsyncLockKp<R, Lock, Mid, V, Root, LockValue, MidValue, Value, MutRoot, MutLock, MutMid, MutValue, G1, S1, L, G2, S2>
+    for AsyncLockKp<
+        R,
+        Lock,
+        Mid,
+        V,
+        Root,
+        LockValue,
+        MidValue,
+        Value,
+        MutRoot,
+        MutLock,
+        MutMid,
+        MutValue,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >
 where
     Root: std::borrow::Borrow<R>,
     LockValue: std::borrow::Borrow<Lock>,
@@ -915,7 +983,16 @@ where
     pub fn then<V3, Value3, MutValue3, G3, S3>(
         self,
         next_kp: crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
-    ) -> AsyncKeyPathThenKp<R, V3, Root, Value3, MutRoot, MutValue3, Self, crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>>
+    ) -> AsyncKeyPathThenKp<
+        R,
+        V3,
+        Root,
+        Value3,
+        MutRoot,
+        MutValue3,
+        Self,
+        crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
+    >
     where
         V2: 'static,
         V3: 'static,
@@ -951,8 +1028,53 @@ where
         S3_2,
     >(
         self,
-        lock_kp: crate::lock::LockKp<V2, Lock3, Mid3, V3, Value2, LockValue3, MidValue3, Value3, MutValue2, MutLock3, MutMid3, MutValue3, G3_1, S3_1, L3, G3_2, S3_2>,
-    ) -> AsyncLockKpThenLockKp<R, V3, Root, Value3, MutRoot, MutValue3, Self, crate::lock::LockKp<V2, Lock3, Mid3, V3, Value2, LockValue3, MidValue3, Value3, MutValue2, MutLock3, MutMid3, MutValue3, G3_1, S3_1, L3, G3_2, S3_2>>
+        lock_kp: crate::lock::LockKp<
+            V2,
+            Lock3,
+            Mid3,
+            V3,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value3,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue3,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
+    ) -> AsyncLockKpThenLockKp<
+        R,
+        V3,
+        Root,
+        Value3,
+        MutRoot,
+        MutValue3,
+        Self,
+        crate::lock::LockKp<
+            V2,
+            Lock3,
+            Mid3,
+            V3,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value3,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue3,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
+    >
     where
         V2: 'static,
         V3: 'static,
@@ -980,10 +1102,23 @@ where
 
 /// Keypath that chains a sync keypath ([crate::Kp]) with an [AsyncKeyPathLike]. Use [crate::Kp::then_async] to create; then `.get(&root).await`.
 #[derive(Clone)]
-pub struct KpThenAsyncKeyPath<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second> {
+pub struct KpThenAsyncKeyPath<
+    R,
+    V,
+    V2,
+    Root,
+    Value,
+    Value2,
+    MutRoot,
+    MutValue,
+    MutValue2,
+    First,
+    Second,
+> {
     pub(crate) first: First,
     pub(crate) second: Second,
-    pub(crate) _p: std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
+    pub(crate) _p:
+        std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
 }
 
 impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
@@ -1008,7 +1143,20 @@ where
 
 #[async_trait(?Send)]
 impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
-    AsyncKeyPathLike<Root, MutRoot> for KpThenAsyncKeyPath<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
+    AsyncKeyPathLike<Root, MutRoot>
+    for KpThenAsyncKeyPath<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        First,
+        Second,
+    >
 where
     First: SyncKeyPathLike<Root, Value, MutRoot, MutValue>,
     Second: AsyncKeyPathLike<Value, MutValue, Value = Value2, MutValue = MutValue2>,
@@ -1035,7 +1183,16 @@ where
     pub fn then<V3, Value3, MutValue3, G3, S3>(
         self,
         next_kp: crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
-    ) -> AsyncKeyPathThenKp<R, V3, Root, Value3, MutRoot, MutValue3, Self, crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>>
+    ) -> AsyncKeyPathThenKp<
+        R,
+        V3,
+        Root,
+        Value3,
+        MutRoot,
+        MutValue3,
+        Self,
+        crate::Kp<V2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
+    >
     where
         V3: 'static,
         Value2: std::borrow::Borrow<V2>,
@@ -1063,7 +1220,16 @@ pub struct AsyncKeyPathThenKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Se
 
 /// Impl when Second is a Kp whose input type is First::Value (covers both Kp<First::Value, V2, ...> and Kp<RKp, V2, First::Value, ...>).
 impl<R, V2, Root, Value2, MutRoot, MutValue2, First, RKp, G, S>
-    AsyncKeyPathThenKp<R, V2, Root, Value2, MutRoot, MutValue2, First, crate::Kp<RKp, V2, First::Value, Value2, First::MutValue, MutValue2, G, S>>
+    AsyncKeyPathThenKp<
+        R,
+        V2,
+        Root,
+        Value2,
+        MutRoot,
+        MutValue2,
+        First,
+        crate::Kp<RKp, V2, First::Value, Value2, First::MutValue, MutValue2, G, S>,
+    >
 where
     First: AsyncKeyPathLike<Root, MutRoot>,
     First::Value: std::borrow::Borrow<RKp>,
@@ -1088,8 +1254,8 @@ where
 }
 
 #[async_trait(?Send)]
-impl<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
-    AsyncKeyPathLike<Root, MutRoot> for ComposedAsyncLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
+impl<R, V2, Root, Value2, MutRoot, MutValue2, First, Second> AsyncKeyPathLike<Root, MutRoot>
+    for ComposedAsyncLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
 where
     First: AsyncKeyPathLike<Root, MutRoot>,
     Second: AsyncKeyPathLike<First::Value, First::MutValue, Value = Value2, MutValue = MutValue2>,
@@ -1118,38 +1284,38 @@ pub struct AsyncLockKpThenLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First,
 }
 
 impl<
-        R,
-        V2,
-        Root,
-        Value2,
-        MutRoot,
-        MutValue2,
-        Lock,
-        Mid,
-        V,
-        LockValue,
-        MidValue,
-        Value,
-        MutLock,
-        MutMid,
-        MutValue,
-        G1,
-        S1,
-        L,
-        G2,
-        S2,
-        Lock2,
-        Mid2,
-        LockValue2,
-        MidValue2,
-        MutLock2,
-        MutMid2,
-        G2_1,
-        S2_1,
-        L2,
-        G2_2,
-        S2_2,
-    >
+    R,
+    V2,
+    Root,
+    Value2,
+    MutRoot,
+    MutValue2,
+    Lock,
+    Mid,
+    V,
+    LockValue,
+    MidValue,
+    Value,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+    Lock2,
+    Mid2,
+    LockValue2,
+    MidValue2,
+    MutLock2,
+    MutMid2,
+    G2_1,
+    S2_1,
+    L2,
+    G2_2,
+    S2_2,
+>
     AsyncLockKpThenLockKp<
         R,
         V2,
@@ -1157,8 +1323,44 @@ impl<
         Value2,
         MutRoot,
         MutValue2,
-        AsyncLockKp<R, Lock, Mid, V, Root, LockValue, MidValue, Value, MutRoot, MutLock, MutMid, MutValue, G1, S1, L, G2, S2>,
-        crate::lock::LockKp<V, Lock2, Mid2, V2, Value, LockValue2, MidValue2, Value2, MutValue, MutLock2, MutMid2, MutValue2, G2_1, S2_1, L2, G2_2, S2_2>,
+        AsyncLockKp<
+            R,
+            Lock,
+            Mid,
+            V,
+            Root,
+            LockValue,
+            MidValue,
+            Value,
+            MutRoot,
+            MutLock,
+            MutMid,
+            MutValue,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+        crate::lock::LockKp<
+            V,
+            Lock2,
+            Mid2,
+            V2,
+            Value,
+            LockValue2,
+            MidValue2,
+            Value2,
+            MutValue,
+            MutLock2,
+            MutMid2,
+            MutValue2,
+            G2_1,
+            S2_1,
+            L2,
+            G2_2,
+            S2_2,
+        >,
     >
 where
     Root: std::borrow::Borrow<R>,
@@ -1204,26 +1406,26 @@ where
 
 // AsyncLockKpThenLockKp when First is ComposedAsyncLockKp (so ComposedAsyncLockKp::then_lock works).
 impl<
-        R,
-        V2,
-        Root,
-        Value2,
-        MutRoot,
-        MutValue2,
-        Lock3,
-        Mid3,
-        LockValue3,
-        MidValue3,
-        MutLock3,
-        MutMid3,
-        G3_1,
-        S3_1,
-        L3,
-        G3_2,
-        S3_2,
-        First,
-        Second,
-    >
+    R,
+    V2,
+    Root,
+    Value2,
+    MutRoot,
+    MutValue2,
+    Lock3,
+    Mid3,
+    LockValue3,
+    MidValue3,
+    MutLock3,
+    MutMid3,
+    G3_1,
+    S3_1,
+    L3,
+    G3_2,
+    S3_2,
+    First,
+    Second,
+>
     AsyncLockKpThenLockKp<
         R,
         V2,
@@ -1232,7 +1434,25 @@ impl<
         MutRoot,
         MutValue2,
         ComposedAsyncLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>,
-        crate::lock::LockKp<Value2, Lock3, Mid3, V2, Value2, LockValue3, MidValue3, Value2, MutValue2, MutLock3, MutMid3, MutValue2, G3_1, S3_1, L3, G3_2, S3_2>,
+        crate::lock::LockKp<
+            Value2,
+            Lock3,
+            Mid3,
+            V2,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value2,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue2,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
     >
 where
     First: AsyncKeyPathLike<Root, MutRoot>,
@@ -1265,26 +1485,26 @@ where
 
 // AsyncLockKpThenLockKp when First is AsyncLockKpThenLockKp (nested; enables .then_lock().then_lock() chains).
 impl<
-        R,
-        V2,
-        Root,
-        Value2,
-        MutRoot,
-        MutValue2,
-        Lock3,
-        Mid3,
-        LockValue3,
-        MidValue3,
-        MutLock3,
-        MutMid3,
-        G3_1,
-        S3_1,
-        L3,
-        G3_2,
-        S3_2,
-        F,
-        S,
-    >
+    R,
+    V2,
+    Root,
+    Value2,
+    MutRoot,
+    MutValue2,
+    Lock3,
+    Mid3,
+    LockValue3,
+    MidValue3,
+    MutLock3,
+    MutMid3,
+    G3_1,
+    S3_1,
+    L3,
+    G3_2,
+    S3_2,
+    F,
+    S,
+>
     AsyncLockKpThenLockKp<
         R,
         V2,
@@ -1293,7 +1513,25 @@ impl<
         MutRoot,
         MutValue2,
         AsyncLockKpThenLockKp<R, V2, Root, Value2, MutRoot, MutValue2, F, S>,
-        crate::lock::LockKp<Value2, Lock3, Mid3, V2, Value2, LockValue3, MidValue3, Value2, MutValue2, MutLock3, MutMid3, MutValue2, G3_1, S3_1, L3, G3_2, S3_2>,
+        crate::lock::LockKp<
+            Value2,
+            Lock3,
+            Mid3,
+            V2,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value2,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue2,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
     >
 where
     F: AsyncKeyPathLike<Root, MutRoot, Value = Value2, MutValue = MutValue2>,
@@ -1345,7 +1583,8 @@ where
 }
 
 // then_lock and then on AsyncLockKpThenLockKp so chains can continue.
-impl<R, V2, Root, Value2, MutRoot, MutValue2, First, Second> AsyncLockKpThenLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
+impl<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
+    AsyncLockKpThenLockKp<R, V2, Root, Value2, MutRoot, MutValue2, First, Second>
 where
     First: AsyncKeyPathLike<Root, MutRoot>,
 {
@@ -1458,8 +1697,53 @@ where
         S3_2,
     >(
         self,
-        lock_kp: crate::lock::LockKp<Value2, Lock3, Mid3, V3, Value2, LockValue3, MidValue3, Value3, MutValue2, MutLock3, MutMid3, MutValue3, G3_1, S3_1, L3, G3_2, S3_2>,
-    ) -> AsyncLockKpThenLockKp<R, V3, Root, Value3, MutRoot, MutValue3, Self, crate::lock::LockKp<Value2, Lock3, Mid3, V3, Value2, LockValue3, MidValue3, Value3, MutValue2, MutLock3, MutMid3, MutValue3, G3_1, S3_1, L3, G3_2, S3_2>>
+        lock_kp: crate::lock::LockKp<
+            Value2,
+            Lock3,
+            Mid3,
+            V3,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value3,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue3,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
+    ) -> AsyncLockKpThenLockKp<
+        R,
+        V3,
+        Root,
+        Value3,
+        MutRoot,
+        MutValue3,
+        Self,
+        crate::lock::LockKp<
+            Value2,
+            Lock3,
+            Mid3,
+            V3,
+            Value2,
+            LockValue3,
+            MidValue3,
+            Value3,
+            MutValue2,
+            MutLock3,
+            MutMid3,
+            MutValue3,
+            G3_1,
+            S3_1,
+            L3,
+            G3_2,
+            S3_2,
+        >,
+    >
     where
         V3: 'static,
         Value2: std::borrow::Borrow<V2>,
@@ -1487,7 +1771,16 @@ where
     pub fn then<V3, Value3, MutValue3, G3, S3>(
         self,
         next_kp: crate::Kp<Value2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
-    ) -> AsyncKeyPathThenKp<R, V3, Root, Value3, MutRoot, MutValue3, Self, crate::Kp<Value2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>>
+    ) -> AsyncKeyPathThenKp<
+        R,
+        V3,
+        Root,
+        Value3,
+        MutRoot,
+        MutValue3,
+        Self,
+        crate::Kp<Value2, V3, Value2, Value3, MutValue2, MutValue3, G3, S3>,
+    >
     where
         V3: 'static,
         Value2: std::borrow::Borrow<V2>,
@@ -1788,7 +2081,9 @@ mod tests {
         assert_eq!(*lock_kp.get_or_else(Some(&root), || &0).await, 99);
 
         // get_mut_or_else
-        let m = lock_kp.get_mut_or_else(Some(&mut root), || panic!("unexpected")).await;
+        let m = lock_kp
+            .get_mut_or_else(Some(&mut root), || panic!("unexpected"))
+            .await;
         *m = 100;
         assert_eq!(lock_kp.get(&root).await, Some(&100));
     }

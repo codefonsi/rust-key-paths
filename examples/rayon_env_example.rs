@@ -12,13 +12,19 @@ fn main() {
     // Show current env (if set)
     let threads = env::var("RAYON_NUM_THREADS").unwrap_or_else(|_| "<not set>".into());
     let stack = env::var("RAYON_STACK_SIZE").unwrap_or_else(|_| "<not set>".into());
-    println!("Before: RAYON_NUM_THREADS = {}, RAYON_STACK_SIZE = {}", threads, stack);
+    println!(
+        "Before: RAYON_NUM_THREADS = {}, RAYON_STACK_SIZE = {}",
+        threads, stack
+    );
 
     // Set defaults for this process
     RayonEnvConfig::configure_env();
     let threads = env::var("RAYON_NUM_THREADS").unwrap();
     let stack = env::var("RAYON_STACK_SIZE").unwrap();
-    println!("After configure_env(): RAYON_NUM_THREADS = {}, RAYON_STACK_SIZE = {}\n", threads, stack);
+    println!(
+        "After configure_env(): RAYON_NUM_THREADS = {}, RAYON_STACK_SIZE = {}\n",
+        threads, stack
+    );
 
     // Save to file
     let path = "rayon_example.conf";
@@ -33,7 +39,10 @@ fn main() {
         env::remove_var("RAYON_STACK_SIZE");
     }
     RayonEnvConfig::load_from_file(path).expect("load config");
-    println!("After load_from_file: RAYON_NUM_THREADS = {:?}", env::var("RAYON_NUM_THREADS"));
+    println!(
+        "After load_from_file: RAYON_NUM_THREADS = {:?}",
+        env::var("RAYON_NUM_THREADS")
+    );
     fs::remove_file(path).ok();
     println!("\nDone.");
 }

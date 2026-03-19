@@ -9,7 +9,7 @@
 
 use key_paths_iter::query_par::ParallelCollectionKeyPath;
 use rayon::prelude::*;
-use rust_key_paths::{Kp, KpType, PKp, AKp};
+use rust_key_paths::{AKp, Kp, KpType, PKp};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. PAIN.001 STRUCTS (simplified ISO 20022 pain.001.001.07)
@@ -94,7 +94,8 @@ fn pain_payment_informations() -> KpType<'static, Pain001, Vec<PaymentInformatio
 
 /// Keypath: PaymentInformation → Vec<CreditTransferTxInfo> (for nested pipeline or GPU buffer extraction)
 #[allow(dead_code)]
-fn pmt_inf_credit_transfer_tx_infos() -> KpType<'static, PaymentInformation, Vec<CreditTransferTxInfo>> {
+fn pmt_inf_credit_transfer_tx_infos()
+-> KpType<'static, PaymentInformation, Vec<CreditTransferTxInfo>> {
     Kp::new(
         |p: &PaymentInformation| Some(&p.credit_transfer_tx_infos),
         |p: &mut PaymentInformation| Some(&mut p.credit_transfer_tx_infos),
@@ -163,7 +164,10 @@ fn total_instructed_amount(pain: &Pain001) -> f64 {
 fn validate_all_amounts_positive(pain: &Pain001) -> bool {
     let kp = pain_payment_informations();
     kp.par_flat_map(pain, |pmt| {
-        pmt.credit_transfer_tx_infos.iter().map(|tx| tx.amount).collect::<Vec<_>>()
+        pmt.credit_transfer_tx_infos
+            .iter()
+            .map(|tx| tx.amount)
+            .collect::<Vec<_>>()
     })
     .par_iter()
     .all(|&a| a > 0.0)
@@ -201,7 +205,11 @@ fn run_akp_pipeline(pain: &Pain001) {
     // Filter: message_id non-empty (Root = Pain001, Value = String)
     let valid_akp = msg_id_akp.filter::<Pain001, String, _>(|s| !s.is_empty());
     // get_as<Root, Value> returns Option<Option<&Value>> when root type matches
-    if valid_akp.get_as::<Pain001, String>(pain).and_then(|o| o).is_some() {
+    if valid_akp
+        .get_as::<Pain001, String>(pain)
+        .and_then(|o| o)
+        .is_some()
+    {
         println!("  AKp: message_id passes filter");
     }
 }
@@ -267,7 +275,10 @@ fn main() {
     // 2) Parallel validation (GPU-ready: par_all over collections)
     let ok_pmt = validate_payment_infos(&pain);
     let ok_tx = validate_credit_transfers(&pain);
-    println!("2) Validation (par_all): payment_infos valid = {}, credit_transfers valid = {}", ok_pmt, ok_tx);
+    println!(
+        "2) Validation (par_all): payment_infos valid = {}, credit_transfers valid = {}",
+        ok_pmt, ok_tx
+    );
 
     // 3) par_map / par_flat_map: collect all amounts for downstream or GPU buffer
     let all_tx = all_credit_transfers(&pain);
@@ -283,7 +294,10 @@ fn main() {
 
     // 5b) GPU-ready validation: flat amount buffer + par_all (can run on GPU via scale_par pattern)
     let amounts_ok = validate_all_amounts_positive(&pain);
-    println!("5b) GPU-ready validation (par_flat_map + par_all): all amounts > 0 = {}", amounts_ok);
+    println!(
+        "5b) GPU-ready validation (par_flat_map + par_all): all amounts > 0 = {}",
+        amounts_ok
+    );
 
     // 6) PKp pipeline (filter + map)
     println!("6) PKp (PartialKeyPath):");

@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example kp_zip_example`
 
-use rust_key_paths::{zip_with_kp, Kp, KpType};
+use rust_key_paths::{Kp, KpType, zip_with_kp};
 
 #[derive(Debug)]
 struct User {

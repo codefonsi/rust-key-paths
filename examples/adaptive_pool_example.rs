@@ -17,14 +17,21 @@ fn main() {
     let p = pool.get_pool();
     let start = Instant::now();
     let _sum: u32 = p.install(|| data.par_iter().copied().sum());
-    println!("After adjust_for_load(20%%): pool installed sum in {:?}", start.elapsed());
+    println!(
+        "After adjust_for_load(20%%): pool installed sum in {:?}",
+        start.elapsed()
+    );
 
     // Simulate "high load" -> use full pool (need to wait 5s for adjustment, so we just get_pool again)
     pool.adjust_for_load(90.0);
     let p = pool.get_pool();
     let start = Instant::now();
     let sum: u32 = p.install(|| data.par_iter().copied().sum());
-    println!("After adjust_for_load(90%%): pool installed sum = {} in {:?}", sum, start.elapsed());
+    println!(
+        "After adjust_for_load(90%%): pool installed sum = {} in {:?}",
+        sum,
+        start.elapsed()
+    );
 
     println!("\nNote: adjust_for_load only changes pool every 5 seconds.");
     println!("Done.");

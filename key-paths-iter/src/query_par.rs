@@ -248,7 +248,8 @@ impl<Root: 'static, Item: 'static> ParallelCollectionKeyPath<Root, Item>
         F: Fn(&Item) -> bool + Sync + Send,
         Item: Sync,
     {
-        get_vec_static(self, root).and_then(|vec| vec.par_iter().find_first(|x| predicate(x)).map(|r| r))
+        get_vec_static(self, root)
+            .and_then(|vec| vec.par_iter().find_first(|x| predicate(x)).map(|r| r))
     }
 
     fn par_find_any<'a, F>(&self, root: &'a Root, predicate: F) -> Option<&'a Item>
@@ -256,7 +257,8 @@ impl<Root: 'static, Item: 'static> ParallelCollectionKeyPath<Root, Item>
         F: Fn(&Item) -> bool + Sync + Send,
         Item: Sync,
     {
-        get_vec_static(self, root).and_then(|vec| vec.par_iter().find_any(|x| predicate(x)).map(|r| r))
+        get_vec_static(self, root)
+            .and_then(|vec| vec.par_iter().find_any(|x| predicate(x)).map(|r| r))
     }
 
     fn par_any<F>(&self, root: &Root, predicate: F) -> bool

@@ -4,7 +4,9 @@
 //! (Builds with key-paths-iter gpu feature enabled in dev-dependencies.)
 
 use key_paths_derive::{Akp, Kp, Pkp};
-use key_paths_iter::wgpu::{numeric_akp_f32, AKpRunner, AKpTier, GpuValue, RunResults, WgpuContext};
+use key_paths_iter::wgpu::{
+    AKpRunner, AKpTier, GpuValue, RunResults, WgpuContext, numeric_akp_f32,
+};
 use rust_key_paths::{AKp, KpType};
 
 #[derive(Kp, Pkp, Akp, Debug)]

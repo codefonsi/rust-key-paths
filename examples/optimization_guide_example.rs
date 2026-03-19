@@ -13,7 +13,10 @@ fn main() {
     // Run presets that use 2MB stack and depth-first to avoid overflow in debug builds
     for (name, pool) in [
         ("data_pipeline", OptimizationGuide::data_pipeline()),
-        ("scientific_computing", OptimizationGuide::scientific_computing()),
+        (
+            "scientific_computing",
+            OptimizationGuide::scientific_computing(),
+        ),
         ("machine_learning", OptimizationGuide::machine_learning()),
     ] {
         let start = Instant::now();
