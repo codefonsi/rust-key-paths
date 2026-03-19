@@ -945,7 +945,15 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, 
     }
 }
 
-pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> 
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
     // /// Map the value through a transformation function
     // /// Returns a new keypath that transforms the value when accessed
     // ///
@@ -1015,13 +1023,13 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
     {
         Kp::new(
             move |root: Root| {
-                self.get_ext(root).map(|value| {
+                self.get(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut_ext(root).map(|value| {
+                self.get_mut(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1049,13 +1057,13 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
     {
         Kp::new(
             move |root: Root| {
-                self.get_ext(root).filter(|value| {
+                self.get(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut_ext(root).filter(|value| {
+                self.get_mut(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
@@ -1084,13 +1092,13 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
     {
         Kp::new(
             move |root: Root| {
-                self.get_ext(root).and_then(|value| {
+                self.get(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut_ext(root).and_then(|value| {
+                self.get_mut(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1118,14 +1126,14 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
     {
         Kp::new(
             move |root: Root| {
-                self.get_ext(root).map(|value| {
+                self.get(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
                 })
             },
             move |root: MutRoot| {
-                self.get_mut_ext(root).map(|value| {
+                self.get_mut(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
@@ -1143,7 +1151,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Item: 'static,
     {
         move |root: Root| {
-            self.get_ext(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     mapper(v).into_iter().collect()
@@ -1160,7 +1168,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Acc: Copy + 'static,
     {
         move |root: Root| {
-            self.get_ext(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     folder(init, v)
@@ -1176,7 +1184,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         V: 'static,
     {
         move |root: Root| {
-            self.get_ext(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1192,7 +1200,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         V: 'static,
     {
         move |root: Root| {
-            self.get_ext(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1208,7 +1216,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         V: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 counter(v)
             })
@@ -1223,7 +1231,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Item: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 finder(v)
             })
@@ -1238,7 +1246,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Output: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 taker(v, n)
             })
@@ -1253,7 +1261,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Output: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 skipper(v, n)
             })
@@ -1268,7 +1276,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Output: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 partitioner(v)
             })
@@ -1283,7 +1291,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Item: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 min_fn(v)
             })
@@ -1298,7 +1306,7 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Item: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 max_fn(v)
             })
@@ -1313,59 +1321,63 @@ pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Ro
         Sum: 'static,
     {
         move |root: Root| {
-            self.get_ext(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 sum_fn(v)
             })
         }
     }
 
-    /// Zip two keypaths on the same root; get_mut returns None.
-    fn zip<V2, Value2, MutValue2, G2, S2>(
-        self,
-        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-    ) -> Kp<
-        R,
-        (Value, Value2),
-        Root,
-        (Value, Value2),
-        MutRoot,
-        (Value, Value2),
-        impl Fn(Root) -> Option<(Value, Value2)>,
-        impl Fn(MutRoot) -> Option<(Value, Value2)>,
-    >
-    where
-        Root: Copy,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        G2: Fn(Root) -> Option<Value2>,
-        S2: Fn(MutRoot) -> Option<MutValue2>,
-        V2: 'static;
+    // /// Zip two keypaths on the same root; get_mut returns None.
+    // fn zip<V2, Value2, MutValue2, G2, S2>(
+    //     self,
+    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+    // ) -> Kp<
+    //     R,
+    //     (Value, Value2),
+    //     Root,
+    //     (Value, Value2),
+    //     MutRoot,
+    //     (Value, Value2),
+    //     impl Fn(Root) -> Option<(Value, Value2)>,
+    //     impl Fn(MutRoot) -> Option<(Value, Value2)>,
+    // >
+    // where
+    //     Root: Copy,
+    //     Value2: std::borrow::Borrow<V2>,
+    //     MutValue2: std::borrow::BorrowMut<V2>,
+    //     G2: Fn(Root) -> Option<Value2>,
+    //     S2: Fn(MutRoot) -> Option<MutValue2>,
+    //     V2: 'static {
+    //         todo!()
+    //     }
 
-    /// Zip two keypaths and transform the pair with a function; get_mut returns None.
-    fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
-        self,
-        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-        transform: F,
-    ) -> Kp<
-        R,
-        Z,
-        Root,
-        Z,
-        MutRoot,
-        Z,
-        impl Fn(Root) -> Option<Z>,
-        impl Fn(MutRoot) -> Option<Z>,
-    >
-    where
-        Root: Copy,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        G2: Fn(Root) -> Option<Value2>,
-        S2: Fn(MutRoot) -> Option<MutValue2>,
-        F: Fn(Value, Value2) -> Z + Copy + 'static,
-        V2: 'static,
-        Z: 'static;
+    // /// Zip two keypaths and transform the pair with a function; get_mut returns None.
+    // fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
+    //     &self,
+    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+    //     transform: F,
+    // ) -> Kp<
+    //     R,
+    //     Z,
+    //     Root,
+    //     Z,
+    //     MutRoot,
+    //     Z,
+    //     impl Fn(Root) -> Option<Z>,
+    //     impl Fn(MutRoot) -> Option<Z>,
+    // >
+    // where
+    //     Root: Copy,
+    //     Value2: std::borrow::Borrow<V2>,
+    //     MutValue2: std::borrow::BorrowMut<V2>,
+    //     G2: Fn(Root) -> Option<Value2>,
+    //     S2: Fn(MutRoot) -> Option<MutValue2>,
+    //     F: Fn(Value, Value2) -> Z + Copy + 'static,
+    //     V2: 'static,
+    //     Z: 'static {
+    //         todo!()
+    //     }
 
 }
 
@@ -1390,6 +1402,17 @@ where
     }
 }
 
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
 /// AKp (AnyKeyPath) - Hides both Root and Value types
 /// Most flexible keypath type for heterogeneous collections
 /// Uses dynamic dispatch and type checking at runtime
@@ -1638,582 +1661,6 @@ where
             first: self,
             second: async_kp,
             _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Zip two keypaths on the same root: get returns `Some((a, b))` when both succeed, else `None`.
-    /// Like [Option::zip](Option::zip). `get_mut` returns `None` (cannot hand out two mutable refs from one root).
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String, age: u32 }
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
-    /// let user = User { name: "Akash".into(), age: 30 };
-    /// let (name, age) = {
-    ///     let zipped = name_kp.zip(age_kp);
-    ///     zipped.get(&user).unwrap()
-    /// };
-    /// assert_eq!(*name, "Akash");
-    /// assert_eq!(*age, 30);
-    /// ```
-    pub fn zip<V2, Value2, MutValue2, G2, S2>(
-        self,
-        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-    ) -> Kp<
-        R,
-        (Value, Value2),
-        Root,
-        (Value, Value2),
-        MutRoot,
-        (Value, Value2),
-        impl Fn(Root) -> Option<(Value, Value2)>,
-        impl Fn(MutRoot) -> Option<(Value, Value2)>,
-    >
-    where
-        Root: Copy,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        G2: Fn(Root) -> Option<Value2>,
-        S2: Fn(MutRoot) -> Option<MutValue2>,
-        V2: 'static,
-    {
-        let first_get = self.get;
-        let second_get = other.get;
-        Kp::new(
-            move |root: Root| {
-                let a = (first_get)(root);
-                let b = (second_get)(root);
-                match (a, b) {
-                    (Some(a), Some(b)) => Some((a, b)),
-                    _ => None,
-                }
-            },
-            // Cannot hand out two &mut from one root safely; get_mut always returns None.
-            move |_root: MutRoot| None::<(Value, Value2)>,
-        )
-    }
-
-    /// Zip two keypaths and transform the pair with a function. Like [Option::zip_with](Option::zip).
-    /// Get returns `Some(transform(a, b))` when both keypaths succeed. `get_mut` returns `None`.
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String, age: u32 }
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
-    /// let user = User { name: "Akash".into(), age: 30 };
-    /// let info = {
-    ///     let full_info = name_kp.zip_with(age_kp, |name: &String, age: &u32| format!("{} (age {})", name, age));
-    ///     full_info.get(&user)
-    /// };
-    /// assert_eq!(info, Some("Akash (age 30)".to_string()));
-    /// ```
-    pub fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
-        self,
-        other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-        transform: F,
-    ) -> Kp<R, Z, Root, Z, MutRoot, Z, impl Fn(Root) -> Option<Z>, impl Fn(MutRoot) -> Option<Z>>
-    where
-        Root: Copy,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        G2: Fn(Root) -> Option<Value2>,
-        S2: Fn(MutRoot) -> Option<MutValue2>,
-        F: Fn(Value, Value2) -> Z + Copy + 'static,
-        V2: 'static,
-        Z: 'static,
-    {
-        let first_get = self.get;
-        let second_get = other.get;
-        Kp::new(
-            move |root: Root| {
-                let a = (first_get)(root);
-                let b = (second_get)(root);
-                match (a, b) {
-                    (Some(a), Some(b)) => Some(transform(a, b)),
-                    _ => None,
-                }
-            },
-            move |_root: MutRoot| None::<Z>,
-        )
-    }
-
-    /// Filter the value based on a predicate
-    /// Returns None if the predicate returns false, otherwise returns the value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { age: i32 }
-    /// let user = User { age: 30 };
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
-    /// let adult_kp = age_kp.filter(|age: &i32| *age >= 18);
-    /// assert_eq!(adult_kp.get(&user), Some(&30));
-    /// ```
-    pub fn filter<F>(
-        &self,
-        predicate: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value>,
-        impl Fn(MutRoot) -> Option<MutValue>,
-    >
-    where
-        // Copy: Required because predicate is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> bool + Copy + 'static,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-        )
-    }
-
-    /// Map and flatten - useful when mapper returns an Option
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { middle_name: Option<String> }
-    /// let user = User { middle_name: Some("M.".to_string()) };
-    /// let middle_kp = KpType::new(|u: &User| Some(&u.middle_name), |_| None);
-    /// let first_char_kp = middle_kp.filter_map(|opt: &Option<String>| {
-    ///     opt.as_ref().and_then(|s| s.chars().next())
-    /// });
-    /// ```
-    pub fn filter_map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> Kp<
-        R,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue>,
-        impl Fn(MutRoot) -> Option<MappedValue>,
-    >
-    where
-        // Copy: Required because mapper is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-        )
-    }
-
-    /// Flat map - maps to an iterator and flattens
-    /// Useful when the value is a collection and you want to iterate over it
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["rust", "web"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// // Use with a closure that returns an iterator
-    /// ```
-    pub fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item>
-    where
-        // No Copy needed - mapper is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> I + 'static,
-        V: 'static,
-        I: IntoIterator<Item = Item>,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v).into_iter().collect()
-                })
-                .unwrap_or_else(Vec::new)
-        }
-    }
-
-    /// Apply a function for its side effects and return the value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String }
-    /// let user = User { name: "Akash".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-    /// name_kp.inspect(|name| println!("Name: {}", name)).get(&user);
-    /// ```
-    pub fn inspect<F>(
-        &self,
-        inspector: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value>,
-        impl Fn(MutRoot) -> Option<MutValue>,
-    >
-    where
-        // Copy: Required because inspector is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) + Copy + 'static,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-        )
-    }
-
-    /// Fold/reduce the value using an accumulator function
-    /// Useful when the value is a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let sum = scores_kp.fold_value(0, |acc, scores| {
-    ///     scores.iter().sum::<i32>() + acc
-    /// })(&user);
-    /// ```
-    pub fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc
-    where
-        // No Copy needed - folder is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(Acc, &V) -> Acc + 'static,
-        V: 'static,
-        // Copy: Required for init since it's returned as default value
-        Acc: Copy + 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    folder(init, v)
-                })
-                .unwrap_or(init)
-        }
-    }
-
-    /// Check if any element satisfies a predicate (for collection values)
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let has_high = scores_kp.any(|scores| scores.iter().any(|&s| s > 90));
-    /// assert!(has_high(&user));
-    /// ```
-    pub fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool
-    where
-        // No Copy needed - predicate is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> bool + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(false)
-        }
-    }
-
-    /// Check if all elements satisfy a predicate (for collection values)
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let all_passing = scores_kp.all(|scores| scores.iter().all(|&s| s >= 70));
-    /// assert!(all_passing(&user));
-    /// ```
-    pub fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool
-    where
-        // No Copy needed - predicate is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> bool + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(true)
-        }
-    }
-
-    /// Count elements in a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["rust", "web", "backend"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let count = tags_kp.count_items(|tags| tags.len());
-    /// assert_eq!(count(&user), Some(3));
-    /// ```
-    pub fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize>
-    where
-        // No Copy needed - counter is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> usize + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                counter(v)
-            })
-        }
-    }
-
-    /// Find first element matching predicate in a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78, 95] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let first_high = scores_kp.find_in(|scores| {
-    ///     scores.iter().find(|&&s| s > 90).copied()
-    /// });
-    /// assert_eq!(first_high(&user), Some(92));
-    /// ```
-    pub fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - finder is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                finder(v)
-            })
-        }
-    }
-
-    /// Take first N elements from a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["a", "b", "c", "d"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let first_two = tags_kp.take(2, |tags, n| tags.iter().take(n).cloned().collect::<Vec<_>>());
-    /// ```
-    pub fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - taker is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                taker(v, n)
-            })
-        }
-    }
-
-    /// Skip first N elements from a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["a", "b", "c", "d"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let after_two = tags_kp.skip(2, |tags, n| tags.iter().skip(n).cloned().collect::<Vec<_>>());
-    /// ```
-    pub fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - skipper is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                skipper(v, n)
-            })
-        }
-    }
-
-    /// Partition a collection value into two groups based on predicate
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 65, 95, 72] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let (passing, failing): (Vec<i32>, Vec<i32>) = scores_kp.partition_value(|scores| {
-    ///     scores.iter().copied().partition(|&s| s >= 70)
-    /// })(&user).unwrap();
-    /// ```
-    pub fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - partitioner is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                partitioner(v)
-            })
-        }
-    }
-
-    /// Get min value from a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let min = scores_kp.min_value(|scores| scores.iter().min().copied());
-    /// assert_eq!(min(&user), Some(78));
-    /// ```
-    pub fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - min_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                min_fn(v)
-            })
-        }
-    }
-
-    /// Get max value from a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let max = scores_kp.max_value(|scores| scores.iter().max().copied());
-    /// assert_eq!(max(&user), Some(92));
-    /// ```
-    pub fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - max_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                max_fn(v)
-            })
-        }
-    }
-
-    /// Sum numeric values in a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let sum = scores_kp.sum_value(|scores: &Vec<i32>| scores.iter().sum());
-    /// assert_eq!(sum(&user), Some(255));
-    /// ```
-    pub fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum>
-    where
-        // No Copy needed - sum_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Sum + 'static,
-        V: 'static,
-        Sum: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                sum_fn(v)
-            })
         }
     }
 
