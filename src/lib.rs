@@ -904,24 +904,47 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     fn type_id_of_root() -> TypeId
     where
         R: 'static,
-    {
-        std::any::TypeId::of::<R>()
-    }
-
+    { std::any::TypeId::of::<R>() }
     fn type_id_of_value() -> TypeId
     where
         V: 'static,
-    {
-        std::any::TypeId::of::<V>()
-    }
-    
-    #[inline]
+    { std::any::TypeId::of::<V>()}
     fn get(&self, root: Root) -> Option<Value>;
-
-    #[inline]
     fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
-
 }
+
+pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+    /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
+    #[inline]
+    fn get_optional(&self, root: Option<Root>) -> Option<Value> {
+        root.and_then(|r| self.get(r))
+    }
+
+    /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
+    #[inline]
+    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
+        root.and_then(|r| self.get_mut(r))
+    }
+
+    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_or_else<F>(&self, root: Root, f: F) -> Value
+    where
+        F: FnOnce() -> Value,
+    {
+        self.get(root).unwrap_or_else(f)
+    }
+
+    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
+    where
+        F: FnOnce() -> MutValue,
+    {
+        self.get_mut(root).unwrap_or_else(f)
+    }
+}
+
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -932,10 +955,12 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
+    #[inline]
     fn get(&self, root: Root) -> Option<Value> {
         (self.get)(root)
     }
 
+    #[inline]
     fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
         (self.set)(root)
     }
@@ -1007,43 +1032,13 @@ where
         }
     }
 
-    pub const fn new_const(get: G, set: S) -> Self {
-        Self {
-            get: get,
-            set: set,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
-    #[inline]
-    pub fn get_optional(&self, root: Option<Root>) -> Option<Value> {
-        root.and_then(|r| (self.get)(r))
-    }
-
-    /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
-    #[inline]
-    pub fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
-        root.and_then(|r| (self.set)(r))
-    }
-
-    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
-    #[inline]
-    pub fn get_or_else<F>(&self, root: Root, f: F) -> Value
-    where
-        F: FnOnce() -> Value,
-    {
-        (self.get)(root).unwrap_or_else(f)
-    }
-
-    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
-    #[inline]
-    pub fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
-    where
-        F: FnOnce() -> MutValue,
-    {
-        (self.set)(root).unwrap_or_else(f)
-    }
+    // pub const fn new_const(get: G, set: S) -> Self {
+    //     Self {
+    //         get: get,
+    //         set: set,
+    //         _p: std::marker::PhantomData,
+    //     }
+    // }
 
     pub fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,

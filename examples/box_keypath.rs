@@ -87,7 +87,7 @@ fn main() {
     Kp - struct 8 genric
     KpType - typealias 2 genric
     KpTrait - to enforce use to use kp 
-    KpTrait - to enforce use to use kp 
+    KpTraitType - 2 gen 
     Accessor - acccessor fns into a triat - get, get_mut
     OptionalAccessor - get_optionl, get_mut_optional
     HofExt - map, filter, flatmap .....
