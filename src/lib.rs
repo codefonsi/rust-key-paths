@@ -914,6 +914,30 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     }
     fn get(&self, root: Root) -> Option<Value>;
     fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
+    fn then<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        Self: Sized,
+        Root: std::borrow::Borrow<R>,
+        Value: std::borrow::Borrow<V>,
+        MutRoot: std::borrow::BorrowMut<R>,
+        MutValue: std::borrow::BorrowMut<V>,
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static;
 }
 
 pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
@@ -1748,6 +1772,7 @@ impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutR
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
     MutRoot: std::borrow::BorrowMut<R>,
     MutValue: std::borrow::BorrowMut<V>,
     G: Fn(Root) -> Option<Value>,
@@ -1761,6 +1786,32 @@ where
     #[inline]
     fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
         (self.set)(root)
+    }
+
+    fn then<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
+            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+        )
     }
 }
 
@@ -1853,32 +1904,6 @@ where
             set: set,
             _p: std::marker::PhantomData,
         }
-    }
-
-    pub fn then<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-        impl Fn(MutRoot) -> Option<MutSubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
-            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
-        )
     }
 
 }
