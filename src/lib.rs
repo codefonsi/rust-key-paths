@@ -2360,6 +2360,16 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    fn kp_adaptable<T>(kp: T) 
+    where T: KpTrait<TestKP, String> {
+        // kp.get
+        // .get_mut
+    }
+    fn test_kp_trait() {
+
+    }
+
+
     #[derive(Debug)]
     struct TestKP {
         a: String,
