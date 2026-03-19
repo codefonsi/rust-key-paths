@@ -21,7 +21,10 @@ fn main() {
         },
         iterations,
     );
-    println!("compare_parallel_vs_sequential ({} iterations):", iterations);
+    println!(
+        "compare_parallel_vs_sequential ({} iterations):",
+        iterations
+    );
     println!("  sequential avg = {:?}", seq);
     println!("  parallel   avg = {:?}", par);
     println!("  speedup    = {:.2}x\n", speedup);

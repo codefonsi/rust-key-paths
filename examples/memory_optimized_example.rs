@@ -24,7 +24,11 @@ fn main() {
     // Slice of u8
     let data_u8: Vec<u8> = (0..10_000_u32).map(|i| i as u8).collect();
     let l1_u8 = MemoryOptimizedConfig::l1_cache_friendly(&data_u8);
-    println!("For u8 (size {}): l1_cache_friendly() = {} items\n", std::mem::size_of::<u8>(), l1_u8);
+    println!(
+        "For u8 (size {}): l1_cache_friendly() = {} items\n",
+        std::mem::size_of::<u8>(),
+        l1_u8
+    );
 
     // Use L2-friendly chunks for a parallel sum
     let chunk = MemoryOptimizedConfig::l2_cache_friendly(&data_u64);
@@ -33,6 +37,10 @@ fn main() {
         .par_chunks(chunk)
         .map(|c| c.iter().copied().sum::<u64>())
         .sum();
-    println!("par_chunks(l2_cache_friendly) sum = {}, elapsed = {:?}", sum, start.elapsed());
+    println!(
+        "par_chunks(l2_cache_friendly) sum = {}, elapsed = {:?}",
+        sum,
+        start.elapsed()
+    );
     println!("\nDone.");
 }

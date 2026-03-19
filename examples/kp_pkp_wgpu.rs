@@ -7,7 +7,7 @@
 //! Run with: `cargo run --example kp_pkp_wgpu`
 
 use key_paths_derive::{Akp, Kp, Pkp};
-use key_paths_iter::wgpu::{IntoNumericAKp, AKpRunner, AKpTier, GpuValue, RunResults, WgpuContext};
+use key_paths_iter::wgpu::{AKpRunner, AKpTier, GpuValue, IntoNumericAKp, RunResults, WgpuContext};
 use rust_key_paths::{AKp, KpType};
 
 #[derive(Kp, Pkp, Akp, Debug)]
@@ -18,13 +18,12 @@ struct User {
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let user = User {
-        name: "Alice".to_string(),
+        name: "Akash".to_string(),
         score: 42.0,
     };
 
     // Numeric: typed Kp from derive → into_numeric_akp (uses get by reference; only f32 is copied)
-    let score_tier =
-        AKpTier::Numeric(User::score().into_numeric_akp("input * 2.0 + 1.0"));
+    let score_tier = AKpTier::Numeric(User::score().into_numeric_akp("input * 2.0 + 1.0"));
 
     // Functional API: Kp::map takes a reference (no copy of value in the get path)
     let score_kp = User::score();

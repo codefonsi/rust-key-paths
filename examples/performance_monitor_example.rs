@@ -18,7 +18,10 @@ fn main() {
     let avg = monitor.average_task_time();
     println!("After 100 tasks of 50μs each:");
     println!("  average_task_time() = {:?}", avg);
-    println!("  throughput_per_second(1) = {:.0}", monitor.throughput_per_second(1));
+    println!(
+        "  throughput_per_second(1) = {:.0}",
+        monitor.throughput_per_second(1)
+    );
 
     // Add more tasks
     for _ in 0..900 {
@@ -26,6 +29,9 @@ fn main() {
     }
     println!("\nAfter 1000 total tasks:");
     println!("  average_task_time() = {:?}", monitor.average_task_time());
-    println!("  throughput_per_second(1) = {:.0}", monitor.throughput_per_second(1));
+    println!(
+        "  throughput_per_second(1) = {:.0}",
+        monitor.throughput_per_second(1)
+    );
     println!("\nDone.");
 }

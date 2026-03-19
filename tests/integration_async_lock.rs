@@ -52,24 +52,30 @@ async fn integration_async_lock_then_lock_then_chain() {
     };
 
     let parking_kp = {
-        let prev: KpType<'_, Level1, Arc<parking_lot::Mutex<Level2>>> =
-            Kp::new(|l1: &Level1| Some(&l1.parking), |l1: &mut Level1| Some(&mut l1.parking));
+        let prev: KpType<'_, Level1, Arc<parking_lot::Mutex<Level2>>> = Kp::new(
+            |l1: &Level1| Some(&l1.parking),
+            |l1: &mut Level1| Some(&mut l1.parking),
+        );
         let next: KpType<'_, Level2, Level2> =
             Kp::new(|l2: &Level2| Some(l2), |l2: &mut Level2| Some(l2));
         LockKp::new(prev, ParkingLotMutexAccess::new(), next)
     };
 
     let async_kp = {
-        let prev: KpType<'_, Level2, Arc<tokio::sync::RwLock<Level3>>> =
-            Kp::new(|l2: &Level2| Some(&l2.rwlock), |l2: &mut Level2| Some(&mut l2.rwlock));
+        let prev: KpType<'_, Level2, Arc<tokio::sync::RwLock<Level3>>> = Kp::new(
+            |l2: &Level2| Some(&l2.rwlock),
+            |l2: &mut Level2| Some(&mut l2.rwlock),
+        );
         let next: KpType<'_, Level3, Level3> =
             Kp::new(|l3: &Level3| Some(l3), |l3: &mut Level3| Some(l3));
         AsyncLockKp::new(prev, TokioRwLockAccess::new(), next)
     };
 
     let std_lock_kp = {
-        let prev: KpType<'_, Level3, std::sync::RwLock<i32>> =
-            Kp::new(|l3: &Level3| Some(&l3.value), |l3: &mut Level3| Some(&mut l3.value));
+        let prev: KpType<'_, Level3, std::sync::RwLock<i32>> = Kp::new(
+            |l3: &Level3| Some(&l3.value),
+            |l3: &mut Level3| Some(&mut l3.value),
+        );
         let next: KpType<'_, i32, i32> = Kp::new(|v: &i32| Some(v), |v: &mut i32| Some(v));
         LockKp::new(prev, StdRwLockAccess::new(), next)
     };

@@ -5,16 +5,21 @@
 //! - Validation (all non-empty): sequential iter().all vs par_validate_buffers_non_empty
 //! - Count by predicate: sequential filter().count vs par_count_by (nodes by kind)
 
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use key_paths_iter::query_par::ParallelCollectionKeyPath;
 use key_paths_iter::scale_par::{
-    par_scale_buffers, par_validate_buffers_non_empty, ComputeState, GpuComputePipeline,
-    GpuBuffer, InteractionNet, NetNode, NodeKind,
+    ComputeState, GpuBuffer, GpuComputePipeline, InteractionNet, NetNode, NodeKind,
+    par_scale_buffers, par_validate_buffers_non_empty,
 };
 use rust_key_paths::Kp;
 use rust_key_paths::KpType;
 
-fn make_pipeline(num_buffers: usize, buffer_len: usize, num_nodes: usize, num_pairs: usize) -> GpuComputePipeline {
+fn make_pipeline(
+    num_buffers: usize,
+    buffer_len: usize,
+    num_nodes: usize,
+    num_pairs: usize,
+) -> GpuComputePipeline {
     GpuComputePipeline {
         cpu_state: ComputeState {
             buffers: (0..num_buffers)
@@ -37,10 +42,24 @@ fn make_pipeline(num_buffers: usize, buffer_len: usize, num_nodes: usize, num_pa
                         2 => NodeKind::Dup,
                         _ => NodeKind::Ref,
                     };
-                    NetNode::new(kind, [i as u32 % 1000, (i + 1) as u32 % 1000, (i + 2) as u32 % 1000])
+                    NetNode::new(
+                        kind,
+                        [
+                            i as u32 % 1000,
+                            (i + 1) as u32 % 1000,
+                            (i + 2) as u32 % 1000,
+                        ],
+                    )
                 })
                 .collect(),
-            active_pairs: (0..num_pairs).map(|i| (i as u32 % num_nodes as u32, (i + 1) as u32 % num_nodes as u32)).collect(),
+            active_pairs: (0..num_pairs)
+                .map(|i| {
+                    (
+                        i as u32 % num_nodes as u32,
+                        (i + 1) as u32 % num_nodes as u32,
+                    )
+                })
+                .collect(),
         },
     }
 }
@@ -54,11 +73,20 @@ fn sequential_scale_buffers(pipeline: &mut GpuComputePipeline, scale: f32) {
 }
 
 fn sequential_validate_buffers_non_empty(pipeline: &GpuComputePipeline) -> bool {
-    pipeline.cpu_state.buffers.iter().all(|b| !b.data.is_empty())
+    pipeline
+        .cpu_state
+        .buffers
+        .iter()
+        .all(|b| !b.data.is_empty())
 }
 
 fn sequential_count_nodes_era(pipeline: &GpuComputePipeline) -> usize {
-    pipeline.reduction_net.nodes.iter().filter(|n| n.kind() == NodeKind::Era).count()
+    pipeline
+        .reduction_net
+        .nodes
+        .iter()
+        .filter(|n| n.kind() == NodeKind::Era)
+        .count()
 }
 
 fn bench_buffer_scale(c: &mut Criterion) {
@@ -66,29 +94,35 @@ fn bench_buffer_scale(c: &mut Criterion) {
     group.sample_size(50);
 
     for (num_buffers, buffer_len) in [(100, 1000), (500, 2000), (1000, 1000)] {
-        group.bench_function(format!("sequential_{}buf_x{}", num_buffers, buffer_len), |b| {
-            b.iter_batched(
-                || make_pipeline(num_buffers, buffer_len, 1000, 2000),
-                |mut pipeline| {
-                    sequential_scale_buffers(black_box(&mut pipeline), 2.0);
-                },
-                BatchSize::SmallInput,
-            );
-        });
+        group.bench_function(
+            format!("sequential_{}buf_x{}", num_buffers, buffer_len),
+            |b| {
+                b.iter_batched(
+                    || make_pipeline(num_buffers, buffer_len, 1000, 2000),
+                    |mut pipeline| {
+                        sequential_scale_buffers(black_box(&mut pipeline), 2.0);
+                    },
+                    BatchSize::SmallInput,
+                );
+            },
+        );
 
         let buffers_kp: KpType<'static, GpuComputePipeline, Vec<GpuBuffer>> = Kp::new(
             |p: &GpuComputePipeline| Some(&p.cpu_state.buffers),
             |p: &mut GpuComputePipeline| Some(&mut p.cpu_state.buffers),
         );
-        group.bench_function(format!("keypath_par_{}buf_x{}", num_buffers, buffer_len), |b| {
-            b.iter_batched(
-                || make_pipeline(num_buffers, buffer_len, 1000, 2000),
-                |mut pipeline| {
-                    par_scale_buffers(black_box(&buffers_kp), black_box(&mut pipeline), 2.0);
-                },
-                BatchSize::SmallInput,
-            );
-        });
+        group.bench_function(
+            format!("keypath_par_{}buf_x{}", num_buffers, buffer_len),
+            |b| {
+                b.iter_batched(
+                    || make_pipeline(num_buffers, buffer_len, 1000, 2000),
+                    |mut pipeline| {
+                        par_scale_buffers(black_box(&buffers_kp), black_box(&mut pipeline), 2.0);
+                    },
+                    BatchSize::SmallInput,
+                );
+            },
+        );
     }
 
     group.finish();
@@ -112,7 +146,11 @@ fn bench_validation(c: &mut Criterion) {
         );
         group.bench_function(
             format!("keypath_par_all_non_empty_{}buf", num_buffers),
-            |b| b.iter(|| par_validate_buffers_non_empty(black_box(&buffers_kp), black_box(&pipeline))),
+            |b| {
+                b.iter(|| {
+                    par_validate_buffers_non_empty(black_box(&buffers_kp), black_box(&pipeline))
+                })
+            },
         );
     }
 
@@ -134,9 +172,14 @@ fn bench_count_by(c: &mut Criterion) {
             |p: &GpuComputePipeline| Some(&p.reduction_net.nodes),
             |p: &mut GpuComputePipeline| Some(&mut p.reduction_net.nodes),
         );
-        group.bench_function(format!("keypath_par_count_by_era_{}nodes", num_nodes), |b| {
-            b.iter(|| nodes_kp.par_count_by(black_box(&pipeline), |n| n.kind() == NodeKind::Era));
-        });
+        group.bench_function(
+            format!("keypath_par_count_by_era_{}nodes", num_nodes),
+            |b| {
+                b.iter(|| {
+                    nodes_kp.par_count_by(black_box(&pipeline), |n| n.kind() == NodeKind::Era)
+                });
+            },
+        );
     }
 
     group.finish();

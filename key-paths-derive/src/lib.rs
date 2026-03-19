@@ -68,11 +68,15 @@ enum WrapperKind {
     // Arc with synchronization primitives (default)
     StdArcMutex,
     StdArcRwLock,
+    StdArcMutexOption,
+    StdArcRwLockOption,
     OptionStdArcMutex,
     OptionStdArcRwLock,
     // Synchronization primitives default
     StdMutex,
     StdRwLock,
+    StdMutexOption,
+    StdRwLockOption,
     OptionStdMutex,
     OptionStdRwLock,
     // Synchronization primitives (parking_lot)
@@ -86,8 +90,12 @@ enum WrapperKind {
     // parking_lot
     ArcMutex,
     ArcRwLock,
+    ArcMutexOption,
+    ArcRwLockOption,
     OptionArcMutex,
     OptionArcRwLock,
+    MutexOption,
+    RwLockOption,
     // Arc with synchronization primitives (tokio::sync - requires tokio feature)
     TokioArcMutex,
     TokioArcRwLock,
@@ -116,36 +124,53 @@ enum WrapperKind {
     PinnedBoxFuture,
 }
 
-/// Helper function to check if a type path includes std::sync module
+/// Helper function to check if a type path is exactly under std::sync (not lock_api or parking_lot).
+/// Requires the path to start with "std" then "sync" so we don't confuse with RwLock&lt;RawRwLock, T&gt; (lock_api).
 fn is_std_sync_type(path: &syn::Path) -> bool {
-    // Check for paths like std::sync::Mutex, std::sync::RwLock
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
     segments.len() >= 2
-        && segments.contains(&"std".to_string())
-        && segments.contains(&"sync".to_string())
+        && segments.get(0).map(|s| s.as_str()) == Some("std")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
 }
 
-/// Helper function to check if a type path includes tokio::sync module
+/// Helper function to check if a type path is exactly under tokio::sync.
 fn is_tokio_sync_type(path: &syn::Path) -> bool {
-    // Check for paths like tokio::sync::Mutex, tokio::sync::RwLock
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
     segments.len() >= 2
-        && segments.contains(&"tokio".to_string())
-        && segments.contains(&"sync".to_string())
+        && segments.get(0).map(|s| s.as_str()) == Some("tokio")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
 }
 
-/// Helper function to check if a type path includes std::sync::atomic module
+/// Helper function to check if a type path is under parking_lot (RwLock/Mutex from lock_api).
+/// Use so we never treat parking_lot::RwLock as std::sync::RwLock.
+fn is_parking_lot_type(path: &syn::Path) -> bool {
+    path.segments.first().map(|s| s.ident == "parking_lot") == Some(true)
+}
+
+/// Helper function to check if a type path is under std::sync::atomic (strict prefix).
 fn is_std_sync_atomic_type(path: &syn::Path) -> bool {
     let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
-    segments.contains(&"std".to_string())
-        && segments.contains(&"sync".to_string())
-        && segments.contains(&"atomic".to_string())
+    segments.len() >= 3
+        && segments.get(0).map(|s| s.as_str()) == Some("std")
+        && segments.get(1).map(|s| s.as_str()) == Some("sync")
+        && segments.get(2).map(|s| s.as_str()) == Some("atomic")
 }
 
 /// Atomic type idents (no type params): AtomicBool, AtomicI8, etc.
 const ATOMIC_TYPE_IDENTS: &[&str] = &[
-    "AtomicBool", "AtomicI8", "AtomicI16", "AtomicI32", "AtomicI64", "AtomicI128", "AtomicIsize",
-    "AtomicU8", "AtomicU16", "AtomicU32", "AtomicU64", "AtomicU128", "AtomicUsize",
+    "AtomicBool",
+    "AtomicI8",
+    "AtomicI16",
+    "AtomicI32",
+    "AtomicI64",
+    "AtomicI128",
+    "AtomicIsize",
+    "AtomicU8",
+    "AtomicU16",
+    "AtomicU32",
+    "AtomicU64",
+    "AtomicU128",
+    "AtomicUsize",
 ];
 
 fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
@@ -348,6 +373,21 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                                 return (WrapperKind::HashMapOption, inner_inner);
                             }
                             // BTreeMapOption is handled in the map block (HashMap/BTreeMap)
+                            // Mutex<Option<T>> / RwLock<Option<T>> (yields LockKp value T)
+                            // std::sync::Mutex<Option<T>> / RwLock<Option<T>>
+                            ("Mutex", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
+                                return (WrapperKind::StdMutexOption, inner_inner);
+                            }
+                            ("RwLock", WrapperKind::Option) if is_std_sync_type(&tp.path) => {
+                                return (WrapperKind::StdRwLockOption, inner_inner);
+                            }
+                            // parking_lot::Mutex<Option<T>> / RwLock<Option<T>>, and bare Mutex/RwLock assumed parking_lot
+                            ("Mutex", WrapperKind::Option) => {
+                                return (WrapperKind::MutexOption, inner_inner);
+                            }
+                            ("RwLock", WrapperKind::Option) => {
+                                return (WrapperKind::RwLockOption, inner_inner);
+                            }
                             // std::sync variants (when inner is StdMutex/StdRwLock)
                             ("Arc", WrapperKind::StdMutex) => {
                                 return (WrapperKind::StdArcMutex, inner_inner);
@@ -355,12 +395,24 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                             ("Arc", WrapperKind::StdRwLock) => {
                                 return (WrapperKind::StdArcRwLock, inner_inner);
                             }
+                            ("Arc", WrapperKind::StdMutexOption) => {
+                                return (WrapperKind::StdArcMutexOption, inner_inner);
+                            }
+                            ("Arc", WrapperKind::StdRwLockOption) => {
+                                return (WrapperKind::StdArcRwLockOption, inner_inner);
+                            }
                             // parking_lot variants (default - when inner is Mutex/RwLock without std::sync prefix)
                             ("Arc", WrapperKind::Mutex) => {
                                 return (WrapperKind::ArcMutex, inner_inner);
                             }
                             ("Arc", WrapperKind::RwLock) => {
                                 return (WrapperKind::ArcRwLock, inner_inner);
+                            }
+                            ("Arc", WrapperKind::MutexOption) => {
+                                return (WrapperKind::ArcMutexOption, inner_inner);
+                            }
+                            ("Arc", WrapperKind::RwLockOption) => {
+                                return (WrapperKind::ArcRwLockOption, inner_inner);
                             }
                             // tokio::sync variants (when inner is TokioMutex/TokioRwLock)
                             ("Arc", WrapperKind::TokioMutex) => {
@@ -386,34 +438,49 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
                                     "LinkedList" => (WrapperKind::LinkedList, Some(inner.clone())),
                                     "BinaryHeap" => (WrapperKind::BinaryHeap, Some(inner.clone())),
                                     "Result" => (WrapperKind::Result, Some(inner.clone())),
-                                    // For std::sync::Mutex and std::sync::RwLock, use Std variants
+                                    // Explicit parking_lot path (lock_api::RwLock) — never treat as std
+                                    "Mutex" if is_parking_lot_type(&tp.path) => {
+                                        (WrapperKind::Mutex, Some(inner.clone()))
+                                    }
+                                    "RwLock" if is_parking_lot_type(&tp.path) => {
+                                        (WrapperKind::RwLock, Some(inner.clone()))
+                                    }
+                                    // std::sync::Mutex and std::sync::RwLock only when path starts with std::sync
                                     "Mutex" if is_std_sync => {
                                         (WrapperKind::StdMutex, Some(inner.clone()))
                                     }
                                     "RwLock" if is_std_sync => {
                                         (WrapperKind::StdRwLock, Some(inner.clone()))
                                     }
-                                    // For tokio::sync::Mutex and tokio::sync::RwLock, use Tokio variants
+                                    // tokio::sync::Mutex and tokio::sync::RwLock
                                     "Mutex" if is_tokio_sync => {
                                         (WrapperKind::TokioMutex, Some(inner.clone()))
                                     }
                                     "RwLock" if is_tokio_sync => {
                                         (WrapperKind::TokioRwLock, Some(inner.clone()))
                                     }
-                                    // Default: parking_lot (no std::sync or tokio::sync prefix)
+                                    // Default: parking_lot (bare Mutex/RwLock or unknown path)
                                     "Mutex" => (WrapperKind::Mutex, Some(inner.clone())),
                                     "RwLock" => (WrapperKind::RwLock, Some(inner.clone())),
                                     "Weak" => (WrapperKind::Weak, Some(inner.clone())),
                                     "Tagged" => (WrapperKind::Tagged, Some(inner.clone())),
                                     "Cow" => (WrapperKind::Cow, Some(inner.clone())),
-                                    "AtomicPtr" if is_std_sync_atomic_type(&tp.path) => (WrapperKind::Atomic, None),
+                                    "AtomicPtr" if is_std_sync_atomic_type(&tp.path) => {
+                                        (WrapperKind::Atomic, None)
+                                    }
                                     "Pin" => (WrapperKind::Pin, Some(inner.clone())),
                                     "Cell" => (WrapperKind::Cell, Some(inner.clone())),
                                     "RefCell" => (WrapperKind::RefCell, Some(inner.clone())),
-                                    "OnceCell" | "OnceLock" => (WrapperKind::OnceCell, Some(inner.clone())),
+                                    "OnceCell" | "OnceLock" => {
+                                        (WrapperKind::OnceCell, Some(inner.clone()))
+                                    }
                                     "Lazy" | "LazyLock" => (WrapperKind::Lazy, Some(inner.clone())),
-                                    "PhantomData" => (WrapperKind::PhantomData, Some(inner.clone())),
-                                    "Range" | "RangeInclusive" => (WrapperKind::Range, Some(inner.clone())),
+                                    "PhantomData" => {
+                                        (WrapperKind::PhantomData, Some(inner.clone()))
+                                    }
+                                    "Range" | "RangeInclusive" => {
+                                        (WrapperKind::Range, Some(inner.clone()))
+                                    }
                                     _ => (WrapperKind::None, None),
                                 };
                             }
@@ -439,9 +506,10 @@ fn extract_wrapper_inner_type(ty: &Type) -> (WrapperKind, Option<Type>) {
 
 /// Check if a field has the #[pin] attribute (pin_project pattern).
 fn field_has_pin_attr(field: &syn::Field) -> bool {
-    field.attrs.iter().any(|attr| {
-        attr.path().get_ident().map(|i| i == "pin").unwrap_or(false)
-    })
+    field
+        .attrs
+        .iter()
+        .any(|attr| attr.path().get_ident().map(|i| i == "pin").unwrap_or(false))
 }
 
 /// Check if a type is a Future (dyn Future, impl Future, or Box<dyn Future>).
@@ -451,7 +519,9 @@ fn is_future_type(ty: &Type) -> bool {
     match ty {
         Type::TraitObject(trait_obj) => trait_obj.bounds.iter().any(|b| {
             if let TypeParamBound::Trait(t) = b {
-                t.path.segments.last()
+                t.path
+                    .segments
+                    .last()
                     .map(|s| s.ident == "Future")
                     .unwrap_or(false)
             } else {
@@ -460,7 +530,9 @@ fn is_future_type(ty: &Type) -> bool {
         }),
         Type::ImplTrait(impl_trait) => impl_trait.bounds.iter().any(|b| {
             if let TypeParamBound::Trait(t) = b {
-                t.path.segments.last()
+                t.path
+                    .segments
+                    .last()
                     .map(|s| s.ident == "Future")
                     .unwrap_or(false)
             } else {
@@ -568,12 +640,12 @@ fn to_snake_case(name: &str) -> String {
 }
 
 /// Derive macro for generating simple keypath methods.
-/// 
+///
 /// Generates one method per field: `StructName::field_name()` that returns a `Kp`.
 /// Intelligently handles wrapper types (Option, Vec, Box, Arc, etc.) to generate appropriate keypaths.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```ignore
 /// #[derive(Kp)]
 /// struct Person {
@@ -582,7 +654,7 @@ fn to_snake_case(name: &str) -> String {
 ///     email: Option<String>,
 ///     addresses: Vec<String>,
 /// }
-/// 
+///
 /// // Generates:
 /// // impl Person {
 /// //     pub fn name() -> Kp<...> { ... }
@@ -606,7 +678,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                 tokens.extend(quote! {
                     /// Returns a generic identity keypath for this type
                     #[inline(always)]
-                    pub fn identity_typed<Root, MutRoot>() -> rust_key_paths::Kp<
+                    pub fn _identity<Root, MutRoot>() -> rust_key_paths::Kp<
                         #name,
                         #name,
                         Root,
@@ -626,16 +698,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         )
                     }
 
-                    /// Returns a simple identity keypath for this type
-                    #[inline(always)]
-                    pub fn identity() -> rust_key_paths::KpType<'static, #name, #name> {
-                        rust_key_paths::Kp::new(
-                            |r: &#name| Some(r),
-                            |r: &mut #name| Some(r)
-                        )
-                    }
+                    // /// Returns a simple identity keypath for this type
+                    // #[inline(always)]
+                    // pub fn identity() -> rust_key_paths::KpType<'static, #name, #name> {
+                    //     rust_key_paths::Kp::new(
+                    //         |r: &#name| Some(r),
+                    //         |r: &mut #name| Some(r)
+                    //     )
+                    // }
                 });
-                
+
                 // When struct has #[pin] fields, generated code calls this.project() which must
                 // be provided by #[pin_project]. If missing, user gets: no method named `project`.
 
@@ -675,6 +747,44 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| root.#field_ident.as_ref(),
                                         |root: &mut #name| root.#field_ident.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionBox, Some(inner_ty)) => {
+                            // For Option<Box<T>>, keypath to T: get returns Option<&T> via as_deref()
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#field_ident.as_deref(),
+                                        |root: &mut #name| root.#field_ident.as_deref_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionRc, Some(inner_ty)) => {
+                            // For Option<Rc<T>>, keypath to T: get returns Option<&T> via as_deref()
+                            // Setter: as_mut() gives Option<&mut Rc<T>>, and_then(Rc::get_mut) gives Option<&mut T>
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#field_ident.as_deref(),
+                                        |root: &mut #name| root.#field_ident.as_mut().and_then(std::rc::Rc::get_mut),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionArc, Some(inner_ty)) => {
+                            // For Option<Arc<T>>, keypath to T: get returns Option<&T> via as_deref()
+                            // Setter: as_mut() gives Option<&mut Arc<T>>, and_then(Arc::get_mut) gives Option<&mut T>
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#field_ident.as_deref(),
+                                        |root: &mut #name| root.#field_ident.as_mut().and_then(std::sync::Arc::get_mut),
                                     )
                                 }
                             });
@@ -749,7 +859,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 });
                             }
                         }
-                        (WrapperKind::BTreeMap, Some(inner_ty)) | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeMap, Some(inner_ty))
+                        | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
                             if let Some((key_ty, _)) = extract_map_key_value(ty) {
                                 tokens.extend(quote! {
                                     #[inline(always)]
@@ -791,6 +902,42 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&*root.#field_ident),
                                         |root: &mut #name| Some(&mut *root.#field_ident),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::BoxOption, Some(inner_ty)) => {
+                            // For Box<Option<T>>, keypath to T: deref Box to Option<T>, then Option::as_ref/as_mut
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#field_ident).as_ref(),
+                                        |root: &mut #name| (&mut *root.#field_ident).as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::RcOption, Some(inner_ty)) => {
+                            // For Rc<Option<T>>, keypath to T: deref Rc to &Option<T>, then Option::as_ref; set = Rc::get_mut then as_mut
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#field_ident).as_ref(),
+                                        |root: &mut #name| std::rc::Rc::get_mut(&mut root.#field_ident).and_then(std::option::Option::as_mut),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcOption, Some(inner_ty)) => {
+                            // For Arc<Option<T>>, keypath to T: deref Arc to &Option<T>, then Option::as_ref; set = Arc::get_mut then as_mut
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#field_ident).as_ref(),
+                                        |root: &mut #name| std::sync::Arc::get_mut(&mut root.#field_ident).and_then(std::option::Option::as_mut),
                                     )
                                 }
                             });
@@ -951,7 +1098,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::OptionCow, Some(inner_ty)) => {
                             // For Option<Cow<'_, B>>
                             tokens.extend(quote! {
@@ -988,7 +1135,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::HashSet, Some(inner_ty)) | (WrapperKind::HashSetOption, Some(inner_ty)) => {
+                        (WrapperKind::HashSet, Some(inner_ty))
+                        | (WrapperKind::HashSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("{}_at", field_ident);
 
                             tokens.extend(quote! {
@@ -1014,7 +1162,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BTreeSet, Some(inner_ty)) | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeSet, Some(inner_ty))
+                        | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("{}_at", field_ident);
 
                             tokens.extend(quote! {
@@ -1040,7 +1189,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::VecDeque, Some(inner_ty)) | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
+                        (WrapperKind::VecDeque, Some(inner_ty))
+                        | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1058,7 +1208,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::LinkedList, Some(_inner_ty)) | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
+                        (WrapperKind::LinkedList, Some(_inner_ty))
+                        | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1069,7 +1220,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BinaryHeap, Some(_inner_ty)) | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
+                        (WrapperKind::BinaryHeap, Some(_inner_ty))
+                        | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -1094,16 +1246,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         }
                         (WrapperKind::StdArcMutex, Some(inner_ty)) => {
                             // For Arc<std::sync::Mutex<T>>
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpArcMutexFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcMutexFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1120,16 +1272,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         }
                         (WrapperKind::StdArcRwLock, Some(inner_ty)) => {
                             // For Arc<std::sync::RwLock<T>>
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpArcRwLockFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcRwLockFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1144,18 +1296,70 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::ArcRwLock, Some(inner_ty)) => {
-                            // For Arc<parking_lot::RwLock<T>> (requires rust-key-paths "parking_lot" feature)
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                        (WrapperKind::StdArcMutexOption, Some(inner_ty)) => {
+                            // For Arc<std::sync::Mutex<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcMutexOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ArcMutexAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::StdArcRwLockOption, Some(inner_ty)) => {
+                            // For Arc<std::sync::RwLock<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcRwLockOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ArcRwLockAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcRwLock, Some(inner_ty)) => {
+                            // For Arc<parking_lot::RwLock<T>> (requires rust-key-paths "parking_lot" feature)
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1172,16 +1376,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         }
                         (WrapperKind::ArcMutex, Some(inner_ty)) => {
                             // For Arc<parking_lot::Mutex<T>> (requires rust-key-paths "parking_lot" feature)
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpParkingLotMutexFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotMutexFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1191,6 +1395,58 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         rust_key_paths::Kp::new(
                                             |v: &#inner_ty| Some(v),
                                             |v: &mut #inner_ty| Some(v),
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcMutexOption, Some(inner_ty)) => {
+                            // For Arc<parking_lot::Mutex<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotMutexOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ParkingLotMutexAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
+                                        ),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcRwLockOption, Some(inner_ty)) => {
+                            // For Arc<parking_lot::RwLock<Option<T>>> — LockKp value T (extract from Option); guard gives &Option<T>
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockOptionFor<#name, #ty, #inner_ty> {
+                                    rust_key_paths::lock::LockKp::new(
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        ),
+                                        rust_key_paths::lock::ParkingLotRwLockAccess::<Option<#inner_ty>>::new(),
+                                        rust_key_paths::Kp::new(
+                                            Option::<#inner_ty>::as_ref,
+                                            Option::<#inner_ty>::as_mut,
                                         ),
                                     )
                                 }
@@ -1223,16 +1479,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::TokioArcMutex, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("{}_async", field_ident);
+                            let kp_async_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1248,16 +1504,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::TokioArcRwLock, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("{}_async", field_ident);
+                            let kp_async_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#field_ident),
@@ -1273,16 +1529,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionTokioArcMutex, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("{}_async", field_ident);
+                            let kp_async_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1298,16 +1554,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionTokioArcRwLock, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("{}_async", field_ident);
+                            let kp_async_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1323,23 +1579,23 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionStdArcMutex, Some(inner_ty)) => {
-                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            // let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<std::sync::Mutex<#inner_ty>>> {
-                                    rust_key_paths::Kp::new(
-                                        |root: &#name| root.#field_ident.as_ref(),
-                                        |root: &mut #name| root.#field_ident.as_mut(),
-                                    )
-                                }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpArcMutexFor<#name, std::sync::Arc<std::sync::Mutex<#inner_ty>>, #inner_ty> {
+                                // pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<std::sync::Mutex<#inner_ty>>> {
+                                //     rust_key_paths::Kp::new(
+                                //         |root: &#name| root.#field_ident.as_ref(),
+                                //         |root: &mut #name| root.#field_ident.as_mut(),
+                                //     )
+                                // }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcMutexFor<#name, std::sync::Arc<std::sync::Mutex<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1355,23 +1611,23 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionArcMutex, Some(inner_ty)) => {
-                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            // let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<parking_lot::Mutex<#inner_ty>>> {
-                                    rust_key_paths::Kp::new(
-                                        |root: &#name| root.#field_ident.as_ref(),
-                                        |root: &mut #name| root.#field_ident.as_mut(),
-                                    )
-                                }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpParkingLotMutexFor<#name, std::sync::Arc<parking_lot::Mutex<#inner_ty>>, #inner_ty> {
+                                // pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<parking_lot::Mutex<#inner_ty>>> {
+                                //     rust_key_paths::Kp::new(
+                                //         |root: &#name| root.#field_ident.as_ref(),
+                                //         |root: &mut #name| root.#field_ident.as_mut(),
+                                //     )
+                                // }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotMutexFor<#name, std::sync::Arc<parking_lot::Mutex<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1387,23 +1643,23 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionStdArcRwLock, Some(inner_ty)) => {
-                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            // let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<std::sync::RwLock<#inner_ty>>> {
-                                    rust_key_paths::Kp::new(
-                                        |root: &#name| root.#field_ident.as_ref(),
-                                        |root: &mut #name| root.#field_ident.as_mut(),
-                                    )
-                                }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpArcRwLockFor<#name, std::sync::Arc<std::sync::RwLock<#inner_ty>>, #inner_ty> {
+                                // pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<std::sync::RwLock<#inner_ty>>> {
+                                //     rust_key_paths::Kp::new(
+                                //         |root: &#name| root.#field_ident.as_ref(),
+                                //         |root: &mut #name| root.#field_ident.as_mut(),
+                                //     )
+                                // }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpArcRwLockFor<#name, std::sync::Arc<std::sync::RwLock<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1419,23 +1675,23 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionArcRwLock, Some(inner_ty)) => {
-                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
-                            let kp_lock_fn = format_ident!("{}_lock", field_ident);
+                            // let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            let kp_lock_fn = format_ident!("{}_kp", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_lock_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
-                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<parking_lot::RwLock<#inner_ty>>> {
-                                    rust_key_paths::Kp::new(
-                                        |root: &#name| root.#field_ident.as_ref(),
-                                        |root: &mut #name| root.#field_ident.as_mut(),
-                                    )
-                                }
-                                pub fn #kp_lock_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockFor<#name, std::sync::Arc<parking_lot::RwLock<#inner_ty>>, #inner_ty> {
+                                // pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::Arc<parking_lot::RwLock<#inner_ty>>> {
+                                //     rust_key_paths::Kp::new(
+                                //         |root: &#name| root.#field_ident.as_ref(),
+                                //         |root: &mut #name| root.#field_ident.as_mut(),
+                                //     )
+                                // }
+                                pub fn #kp_fn() -> rust_key_paths::lock::LockKpParkingLotRwLockFor<#name, std::sync::Arc<parking_lot::RwLock<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::lock::LockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#field_ident.as_ref(),
@@ -1450,12 +1706,11 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::OptionStdMutex, Some(inner_ty))
-                        | (WrapperKind::OptionMutex, Some(inner_ty)) => {
+                        (WrapperKind::OptionStdMutex, Some(inner_ty)) => {
                             let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
@@ -1469,18 +1724,53 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::OptionStdRwLock, Some(inner_ty))
-                        | (WrapperKind::OptionRwLock, Some(inner_ty)) => {
+                        (WrapperKind::OptionMutex, Some(inner_ty)) => {
                             let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, parking_lot::Mutex<#inner_ty>> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#field_ident.as_ref(),
+                                        |root: &mut #name| root.#field_ident.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionStdRwLock, Some(inner_ty)) => {
+                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#field_ident),
                                         |root: &mut #name| Some(&mut root.#field_ident),
                                     )
                                 }
                                 pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::RwLock<#inner_ty>> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#field_ident.as_ref(),
+                                        |root: &mut #name| root.#field_ident.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionRwLock, Some(inner_ty)) => {
+                            let kp_unlocked_fn = format_ident!("{}_unlocked", field_ident);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, parking_lot::RwLock<#inner_ty>> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| root.#field_ident.as_ref(),
                                         |root: &mut #name| root.#field_ident.as_mut(),
@@ -1624,13 +1914,14 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::OptionRefCell, Some(_inner_ty)) => {
+                        (WrapperKind::OptionRefCell, Some(inner_ty)) => {
+                            // Option<RefCell<T>>: keypath to T via borrow()/borrow_mut(); get returns Option<Ref<V>> so caller holds guard (deref for &V)
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_fn() -> rust_key_paths::KpOptionRefCellType<'_, #name, #inner_ty> {
                                     rust_key_paths::Kp::new(
-                                        |root: &#name| Some(&root.#field_ident),
-                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                        |root: &#name| root.#field_ident.as_ref().map(|r| r.borrow()),
+                                        |root: &mut #name| root.#field_ident.as_ref().map(|r| r.borrow_mut()),
                                     )
                                 }
                             });
@@ -1717,7 +2008,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                         }
                     }
                 }
-                
+
                 tokens
             }
             Fields::Unnamed(unnamed) => {
@@ -1774,6 +2065,39 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| root.#idx_lit.as_ref(),
                                         |root: &mut #name| root.#idx_lit.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionBox, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_deref(),
+                                        |root: &mut #name| root.#idx_lit.as_deref_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionRc, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_deref(),
+                                        |root: &mut #name| root.#idx_lit.as_mut().and_then(std::rc::Rc::get_mut),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionArc, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_deref(),
+                                        |root: &mut #name| root.#idx_lit.as_mut().and_then(std::sync::Arc::get_mut),
                                     )
                                 }
                             });
@@ -1847,7 +2171,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 });
                             }
                         }
-                        (WrapperKind::BTreeMap, Some(inner_ty)) | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeMap, Some(inner_ty))
+                        | (WrapperKind::BTreeMapOption, Some(inner_ty)) => {
                             if let Some((key_ty, _)) = extract_map_key_value(ty) {
                                 tokens.extend(quote! {
                                     #[inline(always)]
@@ -1889,6 +2214,39 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&*root.#idx_lit),
                                         |root: &mut #name| Some(&mut *root.#idx_lit),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::BoxOption, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#idx_lit).as_ref(),
+                                        |root: &mut #name| (&mut *root.#idx_lit).as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::RcOption, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#idx_lit).as_ref(),
+                                        |root: &mut #name| std::rc::Rc::get_mut(&mut root.#idx_lit).and_then(std::option::Option::as_mut),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::ArcOption, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| (&*root.#idx_lit).as_ref(),
+                                        |root: &mut #name| std::sync::Arc::get_mut(&mut root.#idx_lit).and_then(std::option::Option::as_mut),
                                     )
                                 }
                             });
@@ -1957,7 +2315,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::Cow, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
@@ -1969,7 +2327,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        
+
                         (WrapperKind::OptionCow, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
@@ -2003,7 +2361,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::HashSet, Some(inner_ty)) | (WrapperKind::HashSetOption, Some(inner_ty)) => {
+                        (WrapperKind::HashSet, Some(inner_ty))
+                        | (WrapperKind::HashSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("f{}_at", idx);
 
                             tokens.extend(quote! {
@@ -2029,7 +2388,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BTreeSet, Some(inner_ty)) | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
+                        (WrapperKind::BTreeSet, Some(inner_ty))
+                        | (WrapperKind::BTreeSetOption, Some(inner_ty)) => {
                             let kp_at_fn = format_ident!("f{}_at", idx);
 
                             tokens.extend(quote! {
@@ -2055,7 +2415,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::VecDeque, Some(inner_ty)) | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
+                        (WrapperKind::VecDeque, Some(inner_ty))
+                        | (WrapperKind::VecDequeOption, Some(inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2073,7 +2434,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::LinkedList, Some(_inner_ty)) | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
+                        (WrapperKind::LinkedList, Some(_inner_ty))
+                        | (WrapperKind::LinkedListOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2084,7 +2446,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::BinaryHeap, Some(_inner_ty)) | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
+                        (WrapperKind::BinaryHeap, Some(_inner_ty))
+                        | (WrapperKind::BinaryHeapOption, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                     pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2131,16 +2494,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::TokioArcMutex, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("f{}_async", idx);
+                            let kp_async_fn = format_ident!("f{}_kp", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#idx_lit),
@@ -2156,16 +2519,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::TokioArcRwLock, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("f{}_async", idx);
+                            let kp_async_fn = format_ident!("f{}_kp", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #ty, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #ty, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| Some(&root.#idx_lit),
@@ -2181,16 +2544,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionTokioArcMutex, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("f{}_async", idx);
+                            let kp_async_fn = format_ident!("f{}_kp", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#idx_lit.as_ref(),
@@ -2206,16 +2569,16 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                             });
                         }
                         (WrapperKind::OptionTokioArcRwLock, Some(inner_ty)) => {
-                            let kp_async_fn = format_ident!("f{}_async", idx);
+                            let kp_async_fn = format_ident!("f{}_kp", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    pub fn #kp_async_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
                                     )
                                 }
-                                pub fn #kp_async_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
+                                pub fn #kp_fn() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
                                     rust_key_paths::async_lock::AsyncLockKp::new(
                                         rust_key_paths::Kp::new(
                                             |root: &#name| root.#idx_lit.as_ref(),
@@ -2302,12 +2665,11 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::OptionStdMutex, Some(inner_ty))
-                        | (WrapperKind::OptionMutex, Some(inner_ty)) => {
+                        (WrapperKind::OptionStdMutex, Some(inner_ty)) => {
                             let kp_unlocked_fn = format_ident!("f{}_unlocked", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
@@ -2321,18 +2683,53 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::OptionStdRwLock, Some(inner_ty))
-                        | (WrapperKind::OptionRwLock, Some(inner_ty)) => {
+                        (WrapperKind::OptionMutex, Some(inner_ty)) => {
                             let kp_unlocked_fn = format_ident!("f{}_unlocked", idx);
                             tokens.extend(quote! {
                                 #[inline(always)]
-                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#idx_lit),
+                                        |root: &mut #name| Some(&mut root.#idx_lit),
+                                    )
+                                }
+                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, parking_lot::Mutex<#inner_ty>> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_ref(),
+                                        |root: &mut #name| root.#idx_lit.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionStdRwLock, Some(inner_ty)) => {
+                            let kp_unlocked_fn = format_ident!("f{}_unlocked", idx);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
                                     )
                                 }
                                 pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, std::sync::RwLock<#inner_ty>> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_ref(),
+                                        |root: &mut #name| root.#idx_lit.as_mut(),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionRwLock, Some(inner_ty)) => {
+                            let kp_unlocked_fn = format_ident!("f{}_unlocked", idx);
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#idx_lit),
+                                        |root: &mut #name| Some(&mut root.#idx_lit),
+                                    )
+                                }
+                                pub fn #kp_unlocked_fn() -> rust_key_paths::KpType<'static, #name, parking_lot::RwLock<#inner_ty>> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| root.#idx_lit.as_ref(),
                                         |root: &mut #name| root.#idx_lit.as_mut(),
@@ -2439,16 +2836,30 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
-                        (WrapperKind::Cell, Some(_inner_ty)) | (WrapperKind::RefCell, Some(_inner_ty))
-                        | (WrapperKind::PhantomData, Some(_inner_ty)) | (WrapperKind::Range, Some(_inner_ty))
-                        | (WrapperKind::OptionCell, Some(_inner_ty)) | (WrapperKind::OptionRefCell, Some(_inner_ty))
-                        | (WrapperKind::OptionPhantomData, Some(_inner_ty)) | (WrapperKind::OptionRange, Some(_inner_ty)) => {
+                        (WrapperKind::Cell, Some(_inner_ty))
+                        | (WrapperKind::RefCell, Some(_inner_ty))
+                        | (WrapperKind::PhantomData, Some(_inner_ty))
+                        | (WrapperKind::Range, Some(_inner_ty))
+                        | (WrapperKind::OptionCell, Some(_inner_ty))
+                        | (WrapperKind::OptionPhantomData, Some(_inner_ty))
+                        | (WrapperKind::OptionRange, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                 pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
                                     rust_key_paths::Kp::new(
                                         |root: &#name| Some(&root.#idx_lit),
                                         |root: &mut #name| Some(&mut root.#idx_lit),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionRefCell, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpOptionRefCellType<'_, #name, #inner_ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| root.#idx_lit.as_ref().map(|r| r.borrow()),
+                                        |root: &mut #name| root.#idx_lit.as_ref().map(|r| r.borrow_mut()),
                                     )
                                 }
                             });
@@ -2493,8 +2904,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
             }
             Fields::Unit => {
                 return syn::Error::new(input_span, "Kp derive does not support unit structs")
-                .to_compile_error()
-                .into();
+                    .to_compile_error()
+                    .into();
             }
         },
         Data::Enum(data_enum) => {
@@ -2851,11 +3262,99 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         }
                                     });
                                 }
-                                (WrapperKind::TokioArcMutex, Some(inner_ty)) => {
-                                    let snake_async = format_ident!("{}_async", snake);
+                                (WrapperKind::StdArcMutexOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
                                     tokens.extend(quote! {
                                         #[inline(always)]
                                         pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpArcMutexOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ArcMutexAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::StdArcRwLockOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpArcRwLockOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ArcRwLockAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::ArcMutexOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpParkingLotMutexOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ParkingLotMutexAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::ArcRwLockOption, Some(inner_ty)) => {
+                                    let snake_lock = format_ident!("{}_lock", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                            )
+                                        }
+                                        pub fn #snake_lock() -> rust_key_paths::lock::LockKpParkingLotRwLockOptionFor<#name, #field_ty, #inner_ty> {
+                                            rust_key_paths::lock::LockKp::new(
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                    |root: &mut #name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
+                                                ),
+                                                rust_key_paths::lock::ParkingLotRwLockAccess::<Option<#inner_ty>>::new(),
+                                                rust_key_paths::Kp::new(Option::<#inner_ty>::as_ref, Option::<#inner_ty>::as_mut),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::TokioArcMutex, Some(inner_ty)) => {
+                                    let snake_async = format_ident!("{}_kp", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake_async() -> rust_key_paths::KpType<'static, #name, #field_ty> {
                                             rust_key_paths::Kp::new(
                                                 |root: &#name| match root {
                                                     #name::#v_ident(inner) => Some(inner),
@@ -2867,7 +3366,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 },
                                             )
                                         }
-                                        pub fn #snake_async() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #field_ty, #inner_ty> {
+                                        pub fn #snake() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, #field_ty, #inner_ty> {
                                             rust_key_paths::async_lock::AsyncLockKp::new(
                                                 rust_key_paths::Kp::new(
                                                     |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
@@ -2880,10 +3379,10 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     });
                                 }
                                 (WrapperKind::TokioArcRwLock, Some(inner_ty)) => {
-                                    let snake_async = format_ident!("{}_async", snake);
+                                    let snake_async = format_ident!("{}_kp", snake);
                                     tokens.extend(quote! {
                                         #[inline(always)]
-                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                        pub fn #snake_async() -> rust_key_paths::KpType<'static, #name, #field_ty> {
                                             rust_key_paths::Kp::new(
                                                 |root: &#name| match root {
                                                     #name::#v_ident(inner) => Some(inner),
@@ -2895,7 +3394,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 },
                                             )
                                         }
-                                        pub fn #snake_async() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #field_ty, #inner_ty> {
+                                        pub fn #snake() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, #field_ty, #inner_ty> {
                                             rust_key_paths::async_lock::AsyncLockKp::new(
                                                 rust_key_paths::Kp::new(
                                                     |root: &#name| match root { #name::#v_ident(inner) => Some(inner), _ => None },
@@ -2908,10 +3407,10 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     });
                                 }
                                 (WrapperKind::OptionTokioArcMutex, Some(inner_ty)) => {
-                                    let snake_async = format_ident!("{}_async", snake);
+                                    let snake_async = format_ident!("{}_kp", snake);
                                     tokens.extend(quote! {
                                         #[inline(always)]
-                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                        pub fn #snake_async() -> rust_key_paths::KpType<'static, #name, #field_ty> {
                                             rust_key_paths::Kp::new(
                                                 |root: &#name| match root {
                                                     #name::#v_ident(inner) => Some(inner),
@@ -2923,7 +3422,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 },
                                             )
                                         }
-                                        pub fn #snake_async() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
+                                        pub fn #snake() -> rust_key_paths::async_lock::AsyncLockKpMutexFor<#name, std::sync::Arc<tokio::sync::Mutex<#inner_ty>>, #inner_ty> {
                                             rust_key_paths::async_lock::AsyncLockKp::new(
                                                 rust_key_paths::Kp::new(
                                                     |root: &#name| match root { #name::#v_ident(inner) => inner.as_ref(), _ => None },
@@ -2936,10 +3435,10 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                     });
                                 }
                                 (WrapperKind::OptionTokioArcRwLock, Some(inner_ty)) => {
-                                    let snake_async = format_ident!("{}_async", snake);
+                                    let snake_async = format_ident!("{}_kp", snake);
                                     tokens.extend(quote! {
                                         #[inline(always)]
-                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                        pub fn #snake_async() -> rust_key_paths::KpType<'static, #name, #field_ty> {
                                             rust_key_paths::Kp::new(
                                                 |root: &#name| match root {
                                                     #name::#v_ident(inner) => Some(inner),
@@ -2951,7 +3450,7 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 },
                                             )
                                         }
-                                        pub fn #snake_async() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
+                                        pub fn #snake() -> rust_key_paths::async_lock::AsyncLockKpRwLockFor<#name, std::sync::Arc<tokio::sync::RwLock<#inner_ty>>, #inner_ty> {
                                             rust_key_paths::async_lock::AsyncLockKp::new(
                                                 rust_key_paths::Kp::new(
                                                     |root: &#name| match root { #name::#v_ident(inner) => inner.as_ref(), _ => None },
@@ -3213,6 +3712,112 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         }
                                     });
                                 }
+                                (WrapperKind::OptionBox, Some(inner_ty)) => {
+                                    // Option<Box<T>>: keypath to T via as_deref() / as_deref_mut()
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_deref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => inner.as_deref_mut(),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::BoxOption, Some(inner_ty)) => {
+                                    // Box<Option<T>>: keypath to T; inner is &Box<Option<T>>, deref then Option::as_ref/as_mut
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => (&*inner).as_ref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => (&mut *inner).as_mut(),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::RcOption, Some(inner_ty)) => {
+                                    // Rc<Option<T>>: keypath to T; get = (&*inner).as_ref(), set = Rc::get_mut then as_mut
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => (&*inner).as_ref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => std::rc::Rc::get_mut(inner).and_then(std::option::Option::as_mut),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::ArcOption, Some(inner_ty)) => {
+                                    // Arc<Option<T>>: keypath to T; get = (&*inner).as_ref(), set = Arc::get_mut then as_mut
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => (&*inner).as_ref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => std::sync::Arc::get_mut(inner).and_then(std::option::Option::as_mut),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::OptionRc, Some(inner_ty)) => {
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_deref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => inner.as_mut().and_then(std::rc::Rc::get_mut),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::OptionArc, Some(inner_ty)) => {
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_deref(),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => inner.as_mut().and_then(std::sync::Arc::get_mut),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
                                 (WrapperKind::OptionCow, Some(inner_ty)) => {
                                     tokens.extend(quote! {
                                         #[inline(always)]
@@ -3351,10 +3956,13 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         }
                                     });
                                 }
-                                (WrapperKind::Cell, Some(_inner_ty)) | (WrapperKind::RefCell, Some(_inner_ty))
-                                | (WrapperKind::PhantomData, Some(_inner_ty)) | (WrapperKind::Range, Some(_inner_ty))
-                                | (WrapperKind::OptionCell, Some(_inner_ty)) | (WrapperKind::OptionRefCell, Some(_inner_ty))
-                                | (WrapperKind::OptionPhantomData, Some(_inner_ty)) | (WrapperKind::OptionRange, Some(_inner_ty)) => {
+                                (WrapperKind::Cell, Some(_inner_ty))
+                                | (WrapperKind::RefCell, Some(_inner_ty))
+                                | (WrapperKind::PhantomData, Some(_inner_ty))
+                                | (WrapperKind::Range, Some(_inner_ty))
+                                | (WrapperKind::OptionCell, Some(_inner_ty))
+                                | (WrapperKind::OptionPhantomData, Some(_inner_ty))
+                                | (WrapperKind::OptionRange, Some(_inner_ty)) => {
                                     tokens.extend(quote! {
                                         #[inline(always)]
                                         pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
@@ -3365,6 +3973,23 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                                 },
                                                 |root: &mut #name| match root {
                                                     #name::#v_ident(inner) => Some(inner),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::OptionRefCell, Some(inner_ty)) => {
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpOptionRefCellType<'_, #name, #inner_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_ref().map(|r| r.borrow()),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => inner.as_ref().map(|r| r.borrow_mut()),
                                                     _ => None,
                                                 },
                                             )
@@ -3451,8 +4076,8 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
         }
         Data::Union(_) => {
             return syn::Error::new(input_span, "Kp derive does not support unions")
-            .to_compile_error()
-            .into();
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -3527,12 +4152,9 @@ pub fn derive_partial_keypaths(input: TokenStream) -> TokenStream {
             quote! { #(#calls),* }
         }
         Data::Union(_) => {
-            return syn::Error::new(
-                input.ident.span(),
-                "Pkp derive does not support unions",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(input.ident.span(), "Pkp derive does not support unions")
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -3569,9 +4191,9 @@ pub fn derive_partial_keypaths(input: TokenStream) -> TokenStream {
 ///
 /// let kps = Person::any_kps();
 /// assert_eq!(kps.len(), 2);
-/// let person = Person { name: "Alice".into(), age: 30 };
+/// let person = Person { name: "Akash".into(), age: 30 };
 /// let name: Option<&String> = kps[0].get(&person as &dyn std::any::Any).and_then(|v| v.downcast_ref());
-/// assert_eq!(name, Some(&"Alice".to_string()));
+/// assert_eq!(name, Some(&"Akash".to_string()));
 /// ```
 #[proc_macro_derive(Akp)]
 pub fn derive_any_keypaths(input: TokenStream) -> TokenStream {
@@ -3615,12 +4237,9 @@ pub fn derive_any_keypaths(input: TokenStream) -> TokenStream {
             quote! { #(#calls),* }
         }
         Data::Union(_) => {
-            return syn::Error::new(
-                input.ident.span(),
-                "Akp derive does not support unions",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(input.ident.span(), "Akp derive does not support unions")
+                .to_compile_error()
+                .into();
         }
     };
 

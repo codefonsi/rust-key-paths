@@ -75,7 +75,7 @@ fn main() {
     // ---- 1. READ using PKp ----
     println!("--- 1. Read using PKp::get_as ---");
     let mut person = Person {
-        name: "Alice".to_string(),
+        name: "Akash".to_string(),
         age: 30,
     };
 
@@ -165,7 +165,9 @@ fn main() {
 
     // After filtering AKp by root+value, we "convert" by using the known typed Kp
     let title_kp = Product::title();
-    title_kp.get_mut(&mut product).map(|t| *t = "Super Gadget".to_string());
+    title_kp
+        .get_mut(&mut product)
+        .map(|t| *t = "Super Gadget".to_string());
     println!("  Product title after write: {}", product.title);
 
     let price_kp = Product::price();

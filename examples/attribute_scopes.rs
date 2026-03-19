@@ -24,8 +24,7 @@ fn main() {
     let nickname_value = nickname_fr.get(&account);
     println!("nickname (readable): {:?}", nickname_value);
 
-    if let Some(balance_ref) = balance_w.get_mut(&mut account)
-    {
+    if let Some(balance_ref) = balance_w.get_mut(&mut account) {
         *balance_ref += 500;
     }
     println!("balance after writable update: {}", account.balance);

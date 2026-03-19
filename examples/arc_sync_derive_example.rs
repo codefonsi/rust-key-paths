@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex, RwLock};
 use key_paths_derive::Kp;
 use rust_key_paths::async_lock::SyncKeyPathLike;
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Kp, Clone, Debug)]
 struct SomeOtherStruct {
@@ -36,13 +36,19 @@ fn main() {
     // Test Arc<RwLock<T>> field access
     let field1_path = SomeStruct::field1();
     if let Some(field1_ref) = field1_path.get(&some_struct) {
-        println!("✅ Arc<RwLock<SomeOtherStruct>> field accessible: {:?}", field1_ref);
+        println!(
+            "✅ Arc<RwLock<SomeOtherStruct>> field accessible: {:?}",
+            field1_ref
+        );
     }
 
     // Test Arc<Mutex<T>> field access
     let field2_path = SomeStruct::field2();
     if let Some(field2_ref) = field2_path.get(&some_struct) {
-        println!("✅ Arc<Mutex<SomeOtherStruct>> field accessible: {:?}", field2_ref);
+        println!(
+            "✅ Arc<Mutex<SomeOtherStruct>> field accessible: {:?}",
+            field2_ref
+        );
     }
 
     println!("\n🎯 Testing with WithContainer Trait");
@@ -145,5 +151,4 @@ fn main() {
             let contact_arc_path = Employee::contact();
         }
     }
-    
 }

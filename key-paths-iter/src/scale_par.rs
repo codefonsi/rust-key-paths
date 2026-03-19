@@ -432,44 +432,47 @@ mod gpu_impl {
 
             let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("HVM2 Reduction Shader"),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../shaders/hvm_reduce.wgsl"))),
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                    "../shaders/hvm_reduce.wgsl"
+                ))),
             });
 
-            let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("HVM2 Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+            let bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("HVM2 Bind Group Layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    },
-                ],
-            });
+                    ],
+                });
 
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("HVM2 Pipeline Layout"),
@@ -477,12 +480,13 @@ mod gpu_impl {
                 push_constant_ranges: &[],
             });
 
-            let reduce_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("HVM2 Reduction Pipeline"),
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "main",
-            });
+            let reduce_pipeline =
+                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("HVM2 Reduction Pipeline"),
+                    layout: Some(&pipeline_layout),
+                    module: &shader,
+                    entry_point: "main",
+                });
 
             Ok(Self {
                 device,
@@ -502,24 +506,32 @@ mod gpu_impl {
             let nodes_bytes = bytemuck::cast_slice(&data.nodes);
             let pairs_bytes = bytemuck::cast_slice(&pairs_redo);
 
-            let nodes_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Nodes Buffer"),
-                contents: nodes_bytes,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            });
+            let nodes_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Nodes Buffer"),
+                    contents: nodes_bytes,
+                    usage: wgpu::BufferUsages::STORAGE
+                        | wgpu::BufferUsages::COPY_SRC
+                        | wgpu::BufferUsages::COPY_DST,
+                });
 
-            let pairs_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Pairs Buffer"),
-                contents: pairs_bytes,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            });
+            let pairs_buffer = self
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Pairs Buffer"),
+                    contents: pairs_bytes,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                });
 
             let metadata: [u32; 4] = [data.node_count, data.pairs.len() as u32, 0u32, 0u32];
-            let metadata_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Metadata Buffer"),
-                contents: bytemuck::cast_slice(&metadata),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            });
+            let metadata_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Metadata Buffer"),
+                        contents: bytemuck::cast_slice(&metadata),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                    });
 
             let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("HVM2 Bind Group"),
@@ -540,9 +552,11 @@ mod gpu_impl {
                 ],
             });
 
-            let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("HVM2 Command Encoder"),
-            });
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("HVM2 Command Encoder"),
+                });
 
             {
                 let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {

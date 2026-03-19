@@ -57,12 +57,18 @@ fn main() {
     // Container access: pinned() returns KpType<WithPin, Pin<Box<String>>>
     let pin_container_kp = WithPin::pinned();
     let container_ref = pin_container_kp.get(&with_pin).unwrap();
-    println!("  pinned() -> Pin<Box<String>>: {:?}", Pin::as_ref(container_ref).get_ref().as_str());
+    println!(
+        "  pinned() -> Pin<Box<String>>: {:?}",
+        Pin::as_ref(container_ref).get_ref().as_str()
+    );
 
     // Inner access: pinned_inner() returns KpType<WithPin, String> (String: Unpin)
     let pin_inner_kp = WithPin::pinned_inner();
     assert_eq!(pin_inner_kp.get(&with_pin), Some(&"pinned".to_string()));
-    println!("  pinned_inner() -> String (requires Unpin): {:?}", pin_inner_kp.get(&with_pin));
+    println!(
+        "  pinned_inner() -> String (requires Unpin): {:?}",
+        pin_inner_kp.get(&with_pin)
+    );
 
     let mut with_pin_mut = WithPin {
         pinned: Pin::new(Box::new("mutable".to_string())),
@@ -70,7 +76,12 @@ fn main() {
     if let Some(s) = pin_inner_kp.get_mut(&mut with_pin_mut) {
         *s = "changed".to_string();
     }
-    println!("  after mutation via pinned_inner: {:?}", std::pin::Pin::as_ref(&with_pin_mut.pinned).get_ref().as_str());
+    println!(
+        "  after mutation via pinned_inner: {:?}",
+        std::pin::Pin::as_ref(&with_pin_mut.pinned)
+            .get_ref()
+            .as_str()
+    );
     println!();
 
     // --- Pin<Box<i32>> ---
@@ -80,7 +91,10 @@ fn main() {
     };
     let int_inner_kp = WithPinDirect::pinned_value_inner();
     assert_eq!(int_inner_kp.get(&with_pin_int), Some(&42));
-    println!("  pinned_value_inner() -> i32: {:?}", int_inner_kp.get(&with_pin_int));
+    println!(
+        "  pinned_value_inner() -> i32: {:?}",
+        int_inner_kp.get(&with_pin_int)
+    );
 
     let mut with_pin_int_mut = WithPinDirect {
         pinned_value: Pin::new(Box::new(100)),

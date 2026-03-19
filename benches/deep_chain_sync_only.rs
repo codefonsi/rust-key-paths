@@ -6,9 +6,9 @@
 //! - Keypath approach: LockKp.then().then_lock().then() chain (two sync Mutex levels)
 //! - Direct lock approach: sync_mutex1.lock(), sync_mutex2.lock(), then access leaf
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rust_key_paths::lock::{ArcMutexAccess, LockKp};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rust_key_paths::Kp;
+use rust_key_paths::lock::{ArcMutexAccess, LockKp};
 use std::sync::{Arc, Mutex};
 
 // Root -> Arc<Mutex<L1>>
@@ -49,24 +49,29 @@ fn make_root() -> Root {
 fn build_and_get(root: &Root) -> Option<&i32> {
     let identity_l1: rust_key_paths::KpType<Level1, Level1> =
         Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-    let kp_sync1: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> =
-        Kp::new(|r: &Root| Some(&r.sync_mutex_1), |r: &mut Root| Some(&mut r.sync_mutex_1));
+    let kp_sync1: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+        |r: &Root| Some(&r.sync_mutex_1),
+        |r: &mut Root| Some(&mut r.sync_mutex_1),
+    );
     let lock_root_to_l1 = LockKp::new(kp_sync1, ArcMutexAccess::new(), identity_l1);
 
-    let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> =
-        Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+    let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> = Kp::new(
+        |l: &Level1| Some(&l.inner),
+        |l: &mut Level1| Some(&mut l.inner),
+    );
 
     let identity_l3: rust_key_paths::KpType<Level3, Level3> =
         Kp::new(|l: &Level3| Some(l), |l: &mut Level3| Some(l));
-    let kp_sync2: rust_key_paths::KpType<Level2, Arc<Mutex<Level3>>> =
-        Kp::new(
-            |l: &Level2| Some(&l.sync_mutex_2),
-            |l: &mut Level2| Some(&mut l.sync_mutex_2),
-        );
+    let kp_sync2: rust_key_paths::KpType<Level2, Arc<Mutex<Level3>>> = Kp::new(
+        |l: &Level2| Some(&l.sync_mutex_2),
+        |l: &mut Level2| Some(&mut l.sync_mutex_2),
+    );
     let lock_l2_to_l3 = LockKp::new(kp_sync2, ArcMutexAccess::new(), identity_l3);
 
-    let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> =
-        Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+    let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> = Kp::new(
+        |l: &Level3| Some(&l.leaf),
+        |l: &mut Level3| Some(&mut l.leaf),
+    );
 
     let step1 = lock_root_to_l1.then(kp_l1_inner);
     let step2 = step1.then_lock(lock_l2_to_l3);
@@ -78,24 +83,29 @@ fn build_and_get(root: &Root) -> Option<&i32> {
 fn build_and_get_mut(root: &mut Root) -> Option<&mut i32> {
     let identity_l1: rust_key_paths::KpType<Level1, Level1> =
         Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-    let kp_sync1: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> =
-        Kp::new(|r: &Root| Some(&r.sync_mutex_1), |r: &mut Root| Some(&mut r.sync_mutex_1));
+    let kp_sync1: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+        |r: &Root| Some(&r.sync_mutex_1),
+        |r: &mut Root| Some(&mut r.sync_mutex_1),
+    );
     let lock_root_to_l1 = LockKp::new(kp_sync1, ArcMutexAccess::new(), identity_l1);
 
-    let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> =
-        Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+    let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> = Kp::new(
+        |l: &Level1| Some(&l.inner),
+        |l: &mut Level1| Some(&mut l.inner),
+    );
 
     let identity_l3: rust_key_paths::KpType<Level3, Level3> =
         Kp::new(|l: &Level3| Some(l), |l: &mut Level3| Some(l));
-    let kp_sync2: rust_key_paths::KpType<Level2, Arc<Mutex<Level3>>> =
-        Kp::new(
-            |l: &Level2| Some(&l.sync_mutex_2),
-            |l: &mut Level2| Some(&mut l.sync_mutex_2),
-        );
+    let kp_sync2: rust_key_paths::KpType<Level2, Arc<Mutex<Level3>>> = Kp::new(
+        |l: &Level2| Some(&l.sync_mutex_2),
+        |l: &mut Level2| Some(&mut l.sync_mutex_2),
+    );
     let lock_l2_to_l3 = LockKp::new(kp_sync2, ArcMutexAccess::new(), identity_l3);
 
-    let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> =
-        Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+    let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> = Kp::new(
+        |l: &Level3| Some(&l.leaf),
+        |l: &mut Level3| Some(&mut l.leaf),
+    );
 
     let step1 = lock_root_to_l1.then(kp_l1_inner);
     let step2 = step1.then_lock(lock_l2_to_l3);

@@ -8,7 +8,7 @@
 #![cfg(all(feature = "tokio", feature = "parking_lot"))]
 
 use rust_key_paths::async_lock::{AsyncLockKp, TokioMutexAccess};
-use rust_key_paths::lock::{LockKp, ArcMutexAccess, ParkingLotMutexAccess};
+use rust_key_paths::lock::{ArcMutexAccess, LockKp, ParkingLotMutexAccess};
 use rust_key_paths::{Kp, KpType};
 use std::sync::{Arc, Mutex};
 
@@ -156,8 +156,10 @@ async fn all_nine_nesting_combinations() {
     let kp_rm: KpType<Root2, Arc<Mutex<B2>>> =
         Kp::new(|r: &Root2| Some(&r.m), |r: &mut Root2| Some(&mut r.m));
     let lock_bx = {
-        let prev: KpType<Arc<Mutex<B2>>, Arc<Mutex<B2>>> =
-            Kp::new(|m: &Arc<Mutex<B2>>| Some(m), |m: &mut Arc<Mutex<B2>>| Some(m));
+        let prev: KpType<Arc<Mutex<B2>>, Arc<Mutex<B2>>> = Kp::new(
+            |m: &Arc<Mutex<B2>>| Some(m),
+            |m: &mut Arc<Mutex<B2>>| Some(m),
+        );
         let next: KpType<B2, i32> = Kp::new(|b: &B2| Some(&b.x), |b: &mut B2| Some(&mut b.x));
         LockKp::new(prev, ArcMutexAccess::new(), next)
     };
@@ -181,9 +183,7 @@ async fn all_nine_nesting_combinations() {
 
     // 4. LockKp → Kp
     let root4 = Root4 {
-        m: Arc::new(Mutex::new(D4 {
-            e: E4 { z: 4 },
-        })),
+        m: Arc::new(Mutex::new(D4 { e: E4 { z: 4 } })),
     };
     let lock_rd = {
         let prev: KpType<Root4, Arc<Mutex<D4>>> =

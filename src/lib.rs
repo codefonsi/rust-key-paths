@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 
 // Export the lock module
 pub mod lock;
+pub mod prelude;
+
 pub use lock::{
     ArcMutexAccess, ArcRwLockAccess, LockAccess, LockKp, LockKpType, RcRefCellAccess,
     StdMutexAccess, StdRwLockAccess,
@@ -27,8 +29,6 @@ pub use lock::{
 
 // Export the async_lock module
 pub mod async_lock;
-
-
 
 // pub struct KpStatic<R, V> {
 //     pub get: fn(&R) -> Option<&V>,
@@ -72,8 +72,6 @@ pub mod async_lock;
 // pub static STATIC_STR_FIELD_KP: KpStatic<AllContainersTest, &'static str> =
 //     KpStatic::new(__get_static_str_field, __set_static_str_field);
 
-
-
 #[cfg(feature = "pin_project")]
 pub mod pin;
 
@@ -90,6 +88,161 @@ impl<T> KeyPathValueTarget for &mut T {
     type Target = T;
 }
 
+/// Build a keypath from `Type.field` segments. Use with types that have keypath accessors (e.g. `#[derive(Kp)]` from key-paths-derive).
+#[macro_export]
+macro_rules! keypath {
+    { $root:ident . $field:ident } => { $root::$field() };
+    { $root:ident . $field:ident . $($ty:ident . $f:ident).+ } => {
+        $root::$field() $(.then($ty::$f()))+
+    };
+    ($root:ident . $field:ident) => { $root::$field() };
+    ($root:ident . $field:ident . $($ty:ident . $f:ident).+) => {
+        $root::$field() $(.then($ty::$f()))+
+    };
+}
+
+/// Get value through a keypath or a default reference when the path returns `None`.
+/// Use with `KpType`: `get_or!(User::name(), &user, &default)` where `default` is `&T` (same type as the path value). Returns `&T`.
+/// Path syntax: `get_or!(&user => User.name, &default)`.
+#[macro_export]
+macro_rules! get_or {
+    ($kp:expr, $root:expr, $default:expr) => {
+        $kp.get($root).unwrap_or($default)
+    };
+    ($root:expr => $($path:tt)*, $default:expr) => {
+        $crate::get_or!($crate::keypath!($($path)*), $root, $default)
+    };
+}
+
+/// Get value through a keypath, or compute an owned fallback when the path returns `None`.
+/// Use with `KpType`: `get_or_else!(User::name(), &user, || "default".to_string())`.
+/// Returns `T` (owned). The keypath's value type must be `Clone`. The closure is only called when the path is `None`.
+/// Path syntax: `get_or_else!(&user => (User.name), || "default".to_string())` — path in parentheses.
+#[macro_export]
+macro_rules! get_or_else {
+    ($kp:expr, $root:expr, $closure:expr) => {
+        $kp.get($root).map(|r| r.clone()).unwrap_or_else($closure)
+    };
+    ($root:expr => ($($path:tt)*), $closure:expr) => {
+        $crate::get_or_else!($crate::keypath!($($path)*), $root, $closure)
+    };
+}
+
+/// Zip multiple keypaths on the same root and apply a closure to the tuple of values.
+/// Returns `Some(closure((v1, v2, ...)))` when all keypaths succeed, else `None`.
+///
+/// # Example
+/// ```
+/// use rust_key_paths::{Kp, KpType, zip_with_kp};
+/// struct User { name: String, age: u32, city: String }
+/// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
+/// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
+/// let city_kp = KpType::new(|u: &User| Some(&u.city), |u: &mut User| Some(&mut u.city));
+/// let user = User { name: "Akash".into(), age: 30, city: "NYC".into() };
+/// let summary = zip_with_kp!(
+///     &user,
+///     |(name, age, city)| format!("{}, {} from {}", name, age, city) =>
+///     name_kp,
+///     age_kp,
+///     city_kp
+/// );
+/// assert_eq!(summary, Some("Akash, 30 from NYC".to_string()));
+/// ```
+#[macro_export]
+macro_rules! zip_with_kp {
+    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr) => {
+        match ($kp1.get($root), $kp2.get($root)) {
+            (Some(__a), Some(__b)) => Some($closure((__a, __b))),
+            _ => None,
+        }
+    };
+    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr) => {
+        match ($kp1.get($root), $kp2.get($root), $kp3.get($root)) {
+            (Some(__a), Some(__b), Some(__c)) => Some($closure((__a, __b, __c))),
+            _ => None,
+        }
+    };
+    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr) => {
+        match (
+            $kp1.get($root),
+            $kp2.get($root),
+            $kp3.get($root),
+            $kp4.get($root),
+        ) {
+            (Some(__a), Some(__b), Some(__c), Some(__d)) => Some($closure((__a, __b, __c, __d))),
+            _ => None,
+        }
+    };
+    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr) => {
+        match (
+            $kp1.get($root),
+            $kp2.get($root),
+            $kp3.get($root),
+            $kp4.get($root),
+            $kp5.get($root),
+        ) {
+            (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e)) => {
+                Some($closure((__a, __b, __c, __d, __e)))
+            }
+            _ => None,
+        }
+    };
+    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr, $kp6:expr) => {
+        match (
+            $kp1.get($root),
+            $kp2.get($root),
+            $kp3.get($root),
+            $kp4.get($root),
+            $kp5.get($root),
+            $kp6.get($root),
+        ) {
+            (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e), Some(__f)) => {
+                Some($closure((__a, __b, __c, __d, __e, __f)))
+            }
+            _ => None,
+        }
+    };
+}
+
+/// Kp will force dev to create get and set while value will be owned
+pub type KpValue<'a, R, V> = Kp<
+    R,
+    V,
+    &'a R,
+    V, // Returns owned V, not &V
+    &'a mut R,
+    V, // Returns owned V, not &mut V
+    for<'b> fn(&'b R) -> Option<V>,
+    for<'b> fn(&'b mut R) -> Option<V>,
+>;
+
+/// Kp will force dev to create get and set while root and value both will be owned
+pub type KpOwned<R, V> = Kp<
+    R,
+    V,
+    R,
+    V, // Returns owned V, not &V
+    R,
+    V, // Returns owned V, not &mut V
+    fn(R) -> Option<V>,
+    fn(R) -> Option<V>,
+>;
+
+/// Kp will force dev to create get and set while taking full ownership of the Root while returning Root as value.
+pub type KpRoot<R> = Kp<
+    R,
+    R,
+    R,
+    R, // Returns owned V, not &V
+    R,
+    R, // Returns owned V, not &mut V
+    fn(R) -> Option<R>,
+    fn(R) -> Option<R>,
+>;
+
+/// Kp for void - experimental
+pub type KpVoid = Kp<(), (), (), (), (), (), fn() -> Option<()>, fn() -> Option<()>>;
+
 pub type KpDynamic<R, V> = Kp<
     R,
     V,
@@ -101,6 +254,28 @@ pub type KpDynamic<R, V> = Kp<
     Box<dyn for<'a> Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync>,
 >;
 
+pub type KpBox<'a, R, V> = Kp<
+    R,
+    V,
+    &'a R,
+    &'a V,
+    &'a mut R,
+    &'a mut V,
+    Box<dyn Fn(&'a R) -> Option<&'a V> + 'a>,
+    Box<dyn Fn(&'a mut R) -> Option<&'a mut V> + 'a>,
+>;
+
+pub type KpArc<'a, R, V> = Kp<
+    R,
+    V,
+    &'a R,
+    &'a V,
+    &'a mut R,
+    &'a mut V,
+    Arc<dyn Fn(&'a R) -> Option<&'a V> + Send + Sync + 'a>,
+    Arc<dyn Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync + 'a>,
+>;
+
 pub type KpType<'a, R, V> = Kp<
     R,
     V,
@@ -110,6 +285,30 @@ pub type KpType<'a, R, V> = Kp<
     &'a mut V,
     for<'b> fn(&'b R) -> Option<&'b V>,
     for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+>;
+
+pub type KpTraitType<'a, R, V> = dyn KpTrait<
+        R,
+        V,
+        &'a R,
+        &'a V,
+        &'a mut R,
+        &'a mut V,
+        for<'b> fn(&'b R) -> Option<&'b V>,
+        for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+    >;
+
+/// Keypath for `Option<RefCell<T>>`: `get` returns `Option<Ref<V>>` so the caller holds the guard.
+/// Use `.get(root).as_ref().map(std::cell::Ref::deref)` to get `Option<&V>` while the `Ref` is in scope.
+pub type KpOptionRefCellType<'a, R, V> = Kp<
+    R,
+    V,
+    &'a R,
+    std::cell::Ref<'a, V>,
+    &'a mut R,
+    std::cell::RefMut<'a, V>,
+    for<'b> fn(&'b R) -> Option<std::cell::Ref<'b, V>>,
+    for<'b> fn(&'b mut R) -> Option<std::cell::RefMut<'b, V>>,
 >;
 
 impl<'a, R, V> KpType<'a, R, V>
@@ -187,16 +386,18 @@ pub type KpComposed<R, V> = Kp<
     Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
 >;
 
-impl<R, V> Kp<
-    R,
-    V,
-    &'static R,
-    &'static V,
-    &'static mut R,
-    &'static mut V,
-    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
-    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
-> {
+impl<R, V>
+    Kp<
+        R,
+        V,
+        &'static R,
+        &'static V,
+        &'static mut R,
+        &'static mut V,
+        Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+        Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
+    >
+{
     /// Build a keypath from two closures (e.g. when they capture a variable like an index).
     /// Same pattern as `Kp::new` in lock.rs; use this when the keypath captures variables.
     pub fn from_closures<G, S>(get: G, set: S) -> Self
@@ -401,7 +602,7 @@ impl AKp {
     /// ```
     /// use rust_key_paths::{AKp, Kp, KpType};
     /// struct User { name: String }
-    /// let user = User { name: "Alice".to_string() };
+    /// let user = User { name: "Akash".to_string() };
     /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
     /// let name_akp = AKp::new(name_kp);
     /// let len_akp = name_akp.map::<User, String, _, _>(|s| s.len());
@@ -618,7 +819,7 @@ where
     /// ```
     /// use rust_key_paths::{Kp, KpType, PKp};
     /// struct User { name: String }
-    /// let user = User { name: "Alice".to_string() };
+    /// let user = User { name: "Akash".to_string() };
     /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
     /// let name_pkp = PKp::new(name_kp);
     /// let len_pkp = name_pkp.map::<String, _, _>(|s| s.len());
@@ -698,80 +899,22 @@ where
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
-/// AKp (AnyKeyPath) - Hides both Root and Value types
-/// Most flexible keypath type for heterogeneous collections
-/// Uses dynamic dispatch and type checking at runtime
-///
-/// # Mutation: get vs get_mut (setter path)
-///
-/// - **[get](Kp::get)** uses the `get` closure (getter): `Fn(Root) -> Option<Value>`
-/// - **[get_mut](Kp::get_mut)** uses the `set` closure (setter): `Fn(MutRoot) -> Option<MutValue>`
-///
-/// When mutating through a Kp, the **setter path** is used—`get_mut` invokes the `set` closure,
-/// not the `get` closure. The getter is for read-only access only.
-#[derive(Clone)]
-pub struct Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    /// Getter closure: used by [Kp::get] for read-only access.
-    pub(crate) get: G,
-    /// Setter closure: used by [Kp::get_mut] for mutation.
-    pub(crate) set: S,
-    _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
-}
-
-// Kp is a functional component (get/set) with no owned data; Send/Sync follow from G and S.
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value> + Send,
-    S: Fn(MutRoot) -> Option<MutValue> + Send,
-{
-}
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value> + Sync,
-    S: Fn(MutRoot) -> Option<MutValue> + Sync,
-{
-}
-
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    pub fn new(get: G, set: S) -> Self {
-        Self {
-            get: get,
-            set: set,
-            _p: std::marker::PhantomData,
-        }
+pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+    fn type_id_of_root() -> TypeId
+    where
+        R: 'static,
+    {
+        std::any::TypeId::of::<R>()
     }
-
-    #[inline]
-    pub fn get(&self, root: Root) -> Option<Value> {
-        (self.get)(root)
+    fn type_id_of_value() -> TypeId
+    where
+        V: 'static,
+    {
+        std::any::TypeId::of::<V>()
     }
-    #[inline]
-    pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
-        (self.set)(root)
-    }
-
-    pub fn then<SV, SubValue, MutSubValue, G2, S2>(
+    fn get(&self, root: Root) -> Option<Value>;
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
+    fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
     ) -> Kp<
@@ -781,24 +924,25 @@ where
         SubValue,
         MutRoot,
         MutSubValue,
-        impl Fn(Root) -> Option<SubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
-        impl Fn(MutRoot) -> Option<MutSubValue> + use<SV, SubValue, MutSubValue, G2, S2, R, V, Root, Value, MutRoot, MutValue, G, S>,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
     >
     where
+        Self: Sized,
+        Root: std::borrow::Borrow<R>,
+        Value: std::borrow::Borrow<V>,
+        MutRoot: std::borrow::BorrowMut<R>,
+        MutValue: std::borrow::BorrowMut<V>,
         SubValue: std::borrow::Borrow<SV>,
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
-            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
-        )
-    }
+        V: 'static;
+}
 
+pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
     /// Chain with a sync [crate::lock::LockKp]. Use `.get(root)` / `.get_mut(root)` on the returned keypath.
-    pub fn then_lock<
+    fn then_lock<
         Lock,
         Mid,
         V2,
@@ -834,7 +978,176 @@ where
             G2,
             S2,
         >,
-    ) -> crate::lock::KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, Self, crate::lock::LockKp<V, Lock, Mid, V2, Value, LockValue, MidValue, Value2, MutValue, MutLock, MutMid, MutValue2, G1, S1, L, G2, S2>>
+    ) -> crate::lock::KpThenLockKp<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        Self,
+        crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    >
+    where
+        V: 'static + Clone,
+        V2: 'static,
+        Value: std::borrow::Borrow<V>,
+        Value2: std::borrow::Borrow<V2>,
+        MutValue: std::borrow::BorrowMut<V>,
+        MutValue2: std::borrow::BorrowMut<V2>,
+        LockValue: std::borrow::Borrow<Lock>,
+        MidValue: std::borrow::Borrow<Mid>,
+        MutLock: std::borrow::BorrowMut<Lock>,
+        MutMid: std::borrow::BorrowMut<Mid>,
+        G1: Fn(Value) -> Option<LockValue>,
+        S1: Fn(MutValue) -> Option<MutLock>,
+        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
+        G2: Fn(MidValue) -> Option<Value2>,
+        S2: Fn(MutMid) -> Option<MutValue2>,
+        Self: Sized;
+
+    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
+    #[cfg(feature = "pin_project")]
+    fn then_pin_future<Struct, Output, L>(
+        self,
+        pin_fut: L,
+    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
+    where
+        V: 'static,
+        Struct: Unpin + 'static,
+        Output: 'static,
+        Value: std::borrow::Borrow<Struct>,
+        MutValue: std::borrow::BorrowMut<Struct>,
+        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+        Self: Sized;
+
+    /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
+    fn then_async<AsyncKp>(
+        self,
+        async_kp: AsyncKp,
+    ) -> crate::async_lock::KpThenAsyncKeyPath<
+        R,
+        V,
+        <AsyncKp::Value as KeyPathValueTarget>::Target,
+        Root,
+        Value,
+        AsyncKp::Value,
+        MutRoot,
+        MutValue,
+        AsyncKp::MutValue,
+        Self,
+        AsyncKp,
+    >
+    where
+        V: 'static,
+        Value: std::borrow::Borrow<V>,
+        MutValue: std::borrow::BorrowMut<V>,
+        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
+        AsyncKp::Value: KeyPathValueTarget
+            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
+        Self: Sized;
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> ChainExt<R, V, Root, Value, MutRoot, MutValue>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn then_lock<
+        Lock,
+        Mid,
+        V2,
+        LockValue,
+        MidValue,
+        Value2,
+        MutLock,
+        MutMid,
+        MutValue2,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >(
+        self,
+        lock_kp: crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    ) -> crate::lock::KpThenLockKp<
+        R,
+        V,
+        V2,
+        Root,
+        Value,
+        Value2,
+        MutRoot,
+        MutValue,
+        MutValue2,
+        Self,
+        crate::lock::LockKp<
+            V,
+            Lock,
+            Mid,
+            V2,
+            Value,
+            LockValue,
+            MidValue,
+            Value2,
+            MutValue,
+            MutLock,
+            MutMid,
+            MutValue2,
+            G1,
+            S1,
+            L,
+            G2,
+            S2,
+        >,
+    >
     where
         V: 'static + Clone,
         V2: 'static,
@@ -859,23 +1172,11 @@ where
         }
     }
 
-    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
-    /// Enables composing futures: `kp.then_pin_future(S::fut_pin_future_kp()).then(...)` to go deeper.
     #[cfg(feature = "pin_project")]
-    pub fn then_pin_future<Struct, Output, L>(
+    fn then_pin_future<Struct, Output, L>(
         self,
         pin_fut: L,
-    ) -> crate::pin::KpThenPinFuture<
-        R,
-        Struct,
-        Output,
-        Root,
-        MutRoot,
-        Value,
-        MutValue,
-        Self,
-        L,
-    >
+    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
         V: 'static,
         Struct: Unpin + 'static,
@@ -891,9 +1192,7 @@ where
         }
     }
 
-    /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
-    /// When `AsyncKp::Value` is a reference type (`&T` / `&mut T`), `V2` is inferred as `T` via [KeyPathValueTarget].
-    pub fn then_async<AsyncKp>(
+    fn then_async<AsyncKp>(
         self,
         async_kp: AsyncKp,
     ) -> crate::async_lock::KpThenAsyncKeyPath<
@@ -925,557 +1224,53 @@ where
             _p: std::marker::PhantomData,
         }
     }
+}
 
-    /// Map the value through a transformation function
-    /// Returns a new keypath that transforms the value when accessed
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String }
-    /// let user = User { name: "Alice".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-    /// let len_kp = name_kp.map(|name: &String| name.len());
-    /// assert_eq!(len_kp.get(&user), Some(5));
-    /// ```
-    pub fn map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> Kp<
-        R,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue>,
-        impl Fn(MutRoot) -> Option<MappedValue>,
-    >
-    where
-        // Copy: Required because mapper is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> MappedValue + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-        )
+pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+{
+    /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
+    #[inline]
+    fn get_optional(&self, root: Option<Root>) -> Option<Value> {
+        root.and_then(|r| self.get(r))
     }
 
-    /// Filter the value based on a predicate
-    /// Returns None if the predicate returns false, otherwise returns the value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { age: i32 }
-    /// let user = User { age: 30 };
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
-    /// let adult_kp = age_kp.filter(|age: &i32| *age >= 18);
-    /// assert_eq!(adult_kp.get(&user), Some(&30));
-    /// ```
-    pub fn filter<F>(
-        &self,
-        predicate: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value>,
-        impl Fn(MutRoot) -> Option<MutValue>,
-    >
-    where
-        // Copy: Required because predicate is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> bool + Copy + 'static,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-        )
+    /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
+    #[inline]
+    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
+        root.and_then(|r| self.get_mut(r))
     }
 
-    /// Map and flatten - useful when mapper returns an Option
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { middle_name: Option<String> }
-    /// let user = User { middle_name: Some("M.".to_string()) };
-    /// let middle_kp = KpType::new(|u: &User| Some(&u.middle_name), |_| None);
-    /// let first_char_kp = middle_kp.filter_map(|opt: &Option<String>| {
-    ///     opt.as_ref().and_then(|s| s.chars().next())
-    /// });
-    /// ```
-    pub fn filter_map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> Kp<
-        R,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue>,
-        impl Fn(MutRoot) -> Option<MappedValue>,
-    >
+    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_or_else<F>(&self, root: Root, f: F) -> Value
     where
-        // Copy: Required because mapper is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
+        F: FnOnce() -> Value,
     {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-        )
+        self.get(root).unwrap_or_else(f)
     }
 
-    /// Flat map - maps to an iterator and flattens
-    /// Useful when the value is a collection and you want to iterate over it
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["rust", "web"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// // Use with a closure that returns an iterator
-    /// ```
-    pub fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item>
+    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
     where
-        // No Copy needed - mapper is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> I + 'static,
-        V: 'static,
-        I: IntoIterator<Item = Item>,
-        Item: 'static,
+        F: FnOnce() -> MutValue,
     {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v).into_iter().collect()
-                })
-                .unwrap_or_else(Vec::new)
-        }
+        self.get_mut(root).unwrap_or_else(f)
     }
+}
 
-    /// Apply a function for its side effects and return the value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String }
-    /// let user = User { name: "Alice".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-    /// name_kp.inspect(|name| println!("Name: {}", name)).get(&user);
-    /// ```
-    pub fn inspect<F>(
-        &self,
-        inspector: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value>,
-        impl Fn(MutRoot) -> Option<MutValue>,
-    >
-    where
-        // Copy: Required because inspector is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) + Copy + 'static,
-        V: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-        )
-    }
-
-    /// Fold/reduce the value using an accumulator function
-    /// Useful when the value is a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let sum = scores_kp.fold_value(0, |acc, scores| {
-    ///     scores.iter().sum::<i32>() + acc
-    /// })(&user);
-    /// ```
-    pub fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc
-    where
-        // No Copy needed - folder is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(Acc, &V) -> Acc + 'static,
-        V: 'static,
-        // Copy: Required for init since it's returned as default value
-        Acc: Copy + 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    folder(init, v)
-                })
-                .unwrap_or(init)
-        }
-    }
-
-    /// Check if any element satisfies a predicate (for collection values)
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let has_high = scores_kp.any(|scores| scores.iter().any(|&s| s > 90));
-    /// assert!(has_high(&user));
-    /// ```
-    pub fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool
-    where
-        // No Copy needed - predicate is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> bool + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(false)
-        }
-    }
-
-    /// Check if all elements satisfy a predicate (for collection values)
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let all_passing = scores_kp.all(|scores| scores.iter().all(|&s| s >= 70));
-    /// assert!(all_passing(&user));
-    /// ```
-    pub fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool
-    where
-        // No Copy needed - predicate is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> bool + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(true)
-        }
-    }
-
-    /// Count elements in a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["rust", "web", "backend"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let count = tags_kp.count_items(|tags| tags.len());
-    /// assert_eq!(count(&user), Some(3));
-    /// ```
-    pub fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize>
-    where
-        // No Copy needed - counter is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> usize + 'static,
-        V: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                counter(v)
-            })
-        }
-    }
-
-    /// Find first element matching predicate in a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78, 95] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let first_high = scores_kp.find_in(|scores| {
-    ///     scores.iter().find(|&&s| s > 90).copied()
-    /// });
-    /// assert_eq!(first_high(&user), Some(92));
-    /// ```
-    pub fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - finder is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                finder(v)
-            })
-        }
-    }
-
-    /// Take first N elements from a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["a", "b", "c", "d"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let first_two = tags_kp.take(2, |tags, n| tags.iter().take(n).cloned().collect::<Vec<_>>());
-    /// ```
-    pub fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - taker is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                taker(v, n)
-            })
-        }
-    }
-
-    /// Skip first N elements from a collection value
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { tags: Vec<&'static str> }
-    /// let user = User { tags: vec!["a", "b", "c", "d"] };
-    /// let tags_kp = KpType::new(|u: &User| Some(&u.tags), |_| None);
-    /// let after_two = tags_kp.skip(2, |tags, n| tags.iter().skip(n).cloned().collect::<Vec<_>>());
-    /// ```
-    pub fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - skipper is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                skipper(v, n)
-            })
-        }
-    }
-
-    /// Partition a collection value into two groups based on predicate
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 65, 95, 72] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let (passing, failing): (Vec<i32>, Vec<i32>) = scores_kp.partition_value(|scores| {
-    ///     scores.iter().copied().partition(|&s| s >= 70)
-    /// })(&user).unwrap();
-    /// ```
-    pub fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output>
-    where
-        // No Copy needed - partitioner is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                partitioner(v)
-            })
-        }
-    }
-
-    /// Get min value from a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let min = scores_kp.min_value(|scores| scores.iter().min().copied());
-    /// assert_eq!(min(&user), Some(78));
-    /// ```
-    pub fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - min_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                min_fn(v)
-            })
-        }
-    }
-
-    /// Get max value from a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let max = scores_kp.max_value(|scores| scores.iter().max().copied());
-    /// assert_eq!(max(&user), Some(92));
-    /// ```
-    pub fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item>
-    where
-        // No Copy needed - max_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).and_then(|value| {
-                let v: &V = value.borrow();
-                max_fn(v)
-            })
-        }
-    }
-
-    /// Sum numeric values in a collection
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { scores: Vec<i32> }
-    /// let user = User { scores: vec![85, 92, 78] };
-    /// let scores_kp = KpType::new(|u: &User| Some(&u.scores), |_| None);
-    /// let sum = scores_kp.sum_value(|scores: &Vec<i32>| scores.iter().sum());
-    /// assert_eq!(sum(&user), Some(255));
-    /// ```
-    pub fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum>
-    where
-        // No Copy needed - sum_fn is only captured once by the returned closure
-        // 'static: Required so the returned function can outlive the call
-        F: Fn(&V) -> Sum + 'static,
-        V: 'static,
-        Sum: 'static,
-    {
-        move |root: Root| {
-            (&self.get)(root).map(|value| {
-                let v: &V = value.borrow();
-                sum_fn(v)
-            })
-        }
-    }
-
-    /// Chain this keypath with another to create a composition
-    /// Alias for `then` with a more descriptive name
-    pub fn chain<SV, SubValue, MutSubValue, G2, S2>(
-        self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
-    ) -> Kp<
-        R,
-        SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
-    >
-    where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
-    {
-        self.then(next)
-    }
-
-    pub fn for_arc<'b>(
+pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn for_arc<'b>(
         &self,
     ) -> Kp<
         std::sync::Arc<R>,
@@ -1496,17 +1291,17 @@ where
         Kp::new(
             move |arc_root: std::sync::Arc<R>| {
                 let r_ref: &R = &*arc_root;
-                (&self.get)(Root::from(r_ref))
+                self.get(Root::from(r_ref))
             },
             move |mut arc_root: std::sync::Arc<R>| {
                 // Get mutable reference only if we have exclusive ownership
                 std::sync::Arc::get_mut(&mut arc_root)
-                    .and_then(|r_mut| (&self.set)(MutRoot::from(r_mut)))
+                    .and_then(|r_mut| self.get_mut(MutRoot::from(r_mut)))
             },
         )
     }
 
-    pub fn for_box<'a>(
+    fn for_box<'a>(
         &self,
     ) -> Kp<
         Box<R>,
@@ -1527,16 +1322,628 @@ where
         Kp::new(
             move |r: Box<R>| {
                 let r_ref: &R = r.as_ref();
-                (&self.get)(Root::from(r_ref))
+                self.get(Root::from(r_ref))
             },
             move |mut r: Box<R>| {
                 // Get mutable reference only if we have exclusive ownership
-                (self.set)(MutRoot::from(r.as_mut()))
+                self.get_mut(MutRoot::from(r.as_mut()))
             },
         )
     }
 }
 
+pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    // /// Map the value through a transformation function
+    // /// Returns a new keypath that transforms the value when accessed
+    // ///
+    // /// # Example
+    // /// ```
+    // /// use rust_key_paths::{Kp, KpType};
+    // /// struct User { name: String }
+    // /// let user = User { name: "Akash".to_string() };
+    // /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
+    // /// let len_kp = name_kp.map(|name: &String| name.len());
+    // /// assert_eq!(len_kp.get(&user), Some(5));
+    // /// ```
+    // fn map<MappedValue, F>(
+    //     &self,
+    //     mapper: F,
+    // ) -> Kp<
+    //     R,
+    //     MappedValue,
+    //     Root,
+    //     MappedValue,
+    //     MutRoot,
+    //     MappedValue,
+    //     impl Fn(Root) -> Option<MappedValue>,
+    //     impl Fn(MutRoot) -> Option<MappedValue>,
+    // >
+    // where
+    //     // Copy: Required because mapper is used in both getter and setter closures
+    //     // 'static: Required because the returned Kp must own its closures
+    //     F: Fn(&V) -> MappedValue + Copy + 'static,
+    //     V: 'static,
+    //     MappedValue: 'static,
+    // {
+    //     Kp::new(
+    //         move |root: Root| {
+    //             &self.get(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //         move |root: MutRoot| {
+    //             &self.get_mut(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //     )
+    // }
+
+    /// Map the value through a transformation function.
+    fn map<MappedValue, F>(
+        &self,
+        mapper: F,
+    ) -> Kp<
+        R,
+        MappedValue,
+        Root,
+        MappedValue,
+        MutRoot,
+        MappedValue,
+        impl Fn(Root) -> Option<MappedValue> + '_,
+        impl Fn(MutRoot) -> Option<MappedValue> + '_,
+    >
+    where
+        F: Fn(&V) -> MappedValue + Copy + 'static,
+        V: 'static,
+        MappedValue: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get(root).map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut(root).map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+        )
+    }
+
+    /// Filter the value based on a predicate.
+    fn filter<F>(
+        &self,
+        predicate: F,
+    ) -> Kp<
+        R,
+        V,
+        Root,
+        Value,
+        MutRoot,
+        MutValue,
+        impl Fn(Root) -> Option<Value> + '_,
+        impl Fn(MutRoot) -> Option<MutValue> + '_,
+    >
+    where
+        F: Fn(&V) -> bool + Copy + 'static,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get(root).filter(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut(root).filter(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+            },
+        )
+    }
+
+    /// Map and flatten when mapper returns an Option.
+    fn filter_map<MappedValue, F>(
+        &self,
+        mapper: F,
+    ) -> Kp<
+        R,
+        MappedValue,
+        Root,
+        MappedValue,
+        MutRoot,
+        MappedValue,
+        impl Fn(Root) -> Option<MappedValue> + '_,
+        impl Fn(MutRoot) -> Option<MappedValue> + '_,
+    >
+    where
+        F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
+        V: 'static,
+        MappedValue: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get(root).and_then(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut(root).and_then(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v)
+                })
+            },
+        )
+    }
+
+    /// Apply a function for its side effects and return the value.
+    fn inspect<F>(
+        &self,
+        inspector: F,
+    ) -> Kp<
+        R,
+        V,
+        Root,
+        Value,
+        MutRoot,
+        MutValue,
+        impl Fn(Root) -> Option<Value> + '_,
+        impl Fn(MutRoot) -> Option<MutValue> + '_,
+    >
+    where
+        F: Fn(&V) + Copy + 'static,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| {
+                self.get(root).map(|value| {
+                    let v: &V = value.borrow();
+                    inspector(v);
+                    value
+                })
+            },
+            move |root: MutRoot| {
+                self.get_mut(root).map(|value| {
+                    let v: &V = value.borrow();
+                    inspector(v);
+                    value
+                })
+            },
+        )
+    }
+
+    /// Flat map - maps to an iterator and flattens.
+    fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
+    where
+        F: Fn(&V) -> I + 'static,
+        V: 'static,
+        I: IntoIterator<Item = Item>,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    mapper(v).into_iter().collect()
+                })
+                .unwrap_or_else(Vec::new)
+        }
+    }
+
+    /// Fold/reduce the value using an accumulator function.
+    fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
+    where
+        F: Fn(Acc, &V) -> Acc + 'static,
+        V: 'static,
+        Acc: Copy + 'static,
+    {
+        move |root: Root| {
+            self.get(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    folder(init, v)
+                })
+                .unwrap_or(init)
+        }
+    }
+
+    /// Check if any element satisfies a predicate.
+    fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+                .unwrap_or(false)
+        }
+    }
+
+    /// Check if all elements satisfy a predicate.
+    fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get(root)
+                .map(|value| {
+                    let v: &V = value.borrow();
+                    predicate(v)
+                })
+                .unwrap_or(true)
+        }
+    }
+
+    /// Count elements in a collection value.
+    fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
+    where
+        F: Fn(&V) -> usize + 'static,
+        V: 'static,
+    {
+        move |root: Root| {
+            self.get(root).map(|value| {
+                let v: &V = value.borrow();
+                counter(v)
+            })
+        }
+    }
+
+    /// Find first element matching predicate in a collection value.
+    fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get(root).and_then(|value| {
+                let v: &V = value.borrow();
+                finder(v)
+            })
+        }
+    }
+
+    /// Take first N elements from a collection value.
+    fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get(root).map(|value| {
+                let v: &V = value.borrow();
+                taker(v, n)
+            })
+        }
+    }
+
+    /// Skip first N elements from a collection value.
+    fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get(root).map(|value| {
+                let v: &V = value.borrow();
+                skipper(v, n)
+            })
+        }
+    }
+
+    /// Partition a collection value into two groups based on predicate.
+    fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
+    where
+        F: Fn(&V) -> Output + 'static,
+        V: 'static,
+        Output: 'static,
+    {
+        move |root: Root| {
+            self.get(root).map(|value| {
+                let v: &V = value.borrow();
+                partitioner(v)
+            })
+        }
+    }
+
+    /// Get min value from a collection.
+    fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get(root).and_then(|value| {
+                let v: &V = value.borrow();
+                min_fn(v)
+            })
+        }
+    }
+
+    /// Get max value from a collection.
+    fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+        V: 'static,
+        Item: 'static,
+    {
+        move |root: Root| {
+            self.get(root).and_then(|value| {
+                let v: &V = value.borrow();
+                max_fn(v)
+            })
+        }
+    }
+
+    /// Sum numeric values in a collection.
+    fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
+    where
+        F: Fn(&V) -> Sum + 'static,
+        V: 'static,
+        Sum: 'static,
+    {
+        move |root: Root| {
+            self.get(root).map(|value| {
+                let v: &V = value.borrow();
+                sum_fn(v)
+            })
+        }
+    }
+
+    // /// Zip two keypaths on the same root; get_mut returns None.
+    // fn zip<V2, Value2, MutValue2, G2, S2>(
+    //     self,
+    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+    // ) -> Kp<
+    //     R,
+    //     (Value, Value2),
+    //     Root,
+    //     (Value, Value2),
+    //     MutRoot,
+    //     (Value, Value2),
+    //     impl Fn(Root) -> Option<(Value, Value2)>,
+    //     impl Fn(MutRoot) -> Option<(Value, Value2)>,
+    // >
+    // where
+    //     Root: Copy,
+    //     Value2: std::borrow::Borrow<V2>,
+    //     MutValue2: std::borrow::BorrowMut<V2>,
+    //     G2: Fn(Root) -> Option<Value2>,
+    //     S2: Fn(MutRoot) -> Option<MutValue2>,
+    //     V2: 'static {
+    //         todo!()
+    //     }
+
+    // /// Zip two keypaths and transform the pair with a function; get_mut returns None.
+    // fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
+    //     &self,
+    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
+    //     transform: F,
+    // ) -> Kp<
+    //     R,
+    //     Z,
+    //     Root,
+    //     Z,
+    //     MutRoot,
+    //     Z,
+    //     impl Fn(Root) -> Option<Z>,
+    //     impl Fn(MutRoot) -> Option<Z>,
+    // >
+    // where
+    //     Root: Copy,
+    //     Value2: std::borrow::Borrow<V2>,
+    //     MutValue2: std::borrow::BorrowMut<V2>,
+    //     G2: Fn(Root) -> Option<Value2>,
+    //     S2: Fn(MutRoot) -> Option<MutValue2>,
+    //     F: Fn(Value, Value2) -> Z + Copy + 'static,
+    //     V2: 'static,
+    //     Z: 'static {
+    //         todo!()
+    //     }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    #[inline]
+    fn get(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+
+    #[inline]
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
+
+    fn then<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
+            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+        )
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S>
+    CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S>
+    HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+/// AKp (AnyKeyPath) - Hides both Root and Value types
+/// Most flexible keypath type for heterogeneous collections
+/// Uses dynamic dispatch and type checking at runtime
+///
+/// # Mutation: get vs get_mut (setter path)
+///
+/// - **[get](Kp::get)** uses the `get` closure (getter): `Fn(Root) -> Option<Value>`
+/// - **[get_mut](Kp::get_mut)** uses the `set` closure (setter): `Fn(MutRoot) -> Option<MutValue>`
+///
+/// When mutating through a Kp, the **setter path** is used—`get_mut` invokes the `set` closure,
+/// not the `get` closure. The getter is for read-only access only.
+#[derive(Clone)]
+pub struct Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    /// Getter closure: used by [Kp::get] for read-only access.
+    pub(crate) get: G,
+    /// Setter closure: used by [Kp::get_mut] for mutation.
+    pub(crate) set: S,
+    _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
+}
+
+// Kp is a functional component (get/set) with no owned data; Send/Sync follow from G and S.
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value> + Send,
+    S: Fn(MutRoot) -> Option<MutValue> + Send,
+{
+}
+unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value> + Sync,
+    S: Fn(MutRoot) -> Option<MutValue> + Sync,
+{
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    pub fn new(get: G, set: S) -> Self {
+        Self {
+            get: get,
+            set: set,
+            _p: std::marker::PhantomData,
+        }
+    }
+
+    #[inline]
+    pub fn get(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+
+    #[inline]
+    pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
+
+    #[inline]
+    pub fn then<SV, SubValue, MutSubValue, G2, S2>(
+        self,
+        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+    ) -> Kp<
+        R,
+        SV,
+        Root,
+        SubValue,
+        MutRoot,
+        MutSubValue,
+        impl Fn(Root) -> Option<SubValue>,
+        impl Fn(MutRoot) -> Option<MutSubValue>,
+    >
+    where
+        SubValue: std::borrow::Borrow<SV>,
+        MutSubValue: std::borrow::BorrowMut<SV>,
+        G2: Fn(Value) -> Option<SubValue>,
+        S2: Fn(MutValue) -> Option<MutSubValue>,
+        V: 'static,
+    {
+        Kp::new(
+            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
+            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+        )
+    }
+
+}
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
 ///
@@ -1544,11 +1951,11 @@ where
 /// ```
 /// use rust_key_paths::{KpType, zip_kps};
 /// struct User { name: String, age: i32 }
-/// let user = User { name: "Alice".to_string(), age: 30 };
+/// let user = User { name: "Akash".to_string(), age: 30 };
 /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
 /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
 /// let zipped_fn = zip_kps(&name_kp, &age_kp);
-/// assert_eq!(zipped_fn(&user), Some((&"Alice".to_string(), &30)));
+/// assert_eq!(zipped_fn(&user), Some((&"Akash".to_string(), &30)));
 /// ```
 pub fn zip_kps<'a, RootType, Value1, Value2>(
     kp1: &'a KpType<'a, RootType, Value1>,
@@ -1983,6 +2390,15 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    fn kp_adaptable<T, Root, Value, MutRoot, MutValue, G, S>(kp: T)
+    where
+        T: KpTrait<TestKP, String, Root, Value, MutRoot, MutValue, G, S>,
+    {
+        // kp.get
+        // .get_mut
+    }
+    fn test_kp_trait() {}
+
     #[derive(Debug)]
     struct TestKP {
         a: String,
@@ -2164,7 +2580,10 @@ mod tests {
         let kp = TestKP::identity();
         let kp_a = TestKP::a();
         // TestKP::a().for_arc();
-        let wres = TestKP::f().then(TestKP2::a()).get_mut(&mut instance).unwrap();
+        let wres = TestKP::f()
+            .then(TestKP2::a())
+            .get_mut(&mut instance)
+            .unwrap();
         *wres = String::from("a3 changed successfully");
         let res = TestKP::f().then(TestKP2::a()).get(&instance);
         println!("{:?}", res);
@@ -2176,6 +2595,49 @@ mod tests {
         let new_kp_from_hashmap = TestKP::g(0).then(TestKP2::a());
         println!("{:?}", new_kp_from_hashmap.get(&instance));
     }
+
+    // #[test]
+    // fn test_get_or_and_get_or_else() {
+    //     struct User {
+    //         name: String,
+    //     }
+    //     impl User {
+    //         fn name() -> KpType<'static, User, String> {
+    //             KpType::new(
+    //                 |u: &User| Some(&u.name),
+    //                 |u: &mut User| Some(&mut u.name),
+    //             )
+    //         }
+    //     }
+    //     let user = User {
+    //         name: "Akash".to_string(),
+    //     };
+    //     let default_ref: String = "default".to_string();
+    //     // get_or with kp form
+    //     let r = get_or!(User::name(), &user, &default_ref);
+    //     assert_eq!(*r, "Akash");
+    //     // get_or_else with kp form (returns owned)
+    //     let owned = get_or_else!(User::name(), &user, || "fallback".to_string());
+    //     assert_eq!(owned, "Akash");
+
+    //     // When path returns None, fallback is used
+    //     struct WithOption {
+    //         opt: Option<String>,
+    //     }
+    //     impl WithOption {
+    //         fn opt() -> KpType<'static, WithOption, String> {
+    //             KpType::new(
+    //                 |w: &WithOption| w.opt.as_ref(),
+    //                 |_w: &mut WithOption| None,
+    //             )
+    //         }
+    //     }
+    //     let with_none = WithOption { opt: None };
+    //     let r = get_or!(WithOption::opt(), &with_none, &default_ref);
+    //     assert_eq!(*r, "default");
+    //     let owned = get_or_else!(&with_none => (WithOption.opt), || "computed".to_string());
+    //     assert_eq!(owned, "computed");
+    // }
 
     // #[test]
     // fn test_lock() {
@@ -2402,7 +2864,7 @@ mod tests {
         }
 
         let user = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
         };
 
@@ -2415,7 +2877,7 @@ mod tests {
         let age_pkp = PKp::new(age_kp);
 
         // Test get_as with correct type
-        assert_eq!(name_pkp.get_as::<String>(&user), Some(&"Alice".to_string()));
+        assert_eq!(name_pkp.get_as::<String>(&user), Some(&"Akash".to_string()));
         assert_eq!(age_pkp.get_as::<i32>(&user), Some(&30));
 
         // Test get_as with wrong type returns None
@@ -2673,7 +3135,7 @@ mod tests {
         }
 
         let user = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
         };
 
@@ -2703,7 +3165,7 @@ mod tests {
         }
 
         let adult = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
         };
 
@@ -2807,7 +3269,7 @@ mod tests {
         }
 
         let adult = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
         };
 
@@ -2911,7 +3373,7 @@ mod tests {
         }
 
         let user = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
         };
 
         // Simple test - just verify that inspect returns the correct value
@@ -2922,7 +3384,7 @@ mod tests {
         // We can't easily test side effects with Copy constraint,
         // so we'll just test that inspect passes through the value
         let result = name_kp.get(&user);
-        assert_eq!(result, Some(&"Alice".to_string()));
+        assert_eq!(result, Some(&"Akash".to_string()));
 
         // The inspect method works, it just requires Copy closures
         // which limits its usefulness for complex side effects
@@ -3176,8 +3638,8 @@ mod tests {
         );
 
         // Chain all together - store intermediate result
-        let profile_settings = profile_kp.chain(settings_kp);
-        let theme_path = profile_settings.chain(theme_kp);
+        let profile_settings = profile_kp.then(settings_kp);
+        let theme_path = profile_settings.then(theme_kp);
         assert_eq!(theme_path.get(&user), Some(&"dark".to_string()));
     }
 
@@ -3190,7 +3652,7 @@ mod tests {
         }
 
         let user = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
         };
 
@@ -3200,7 +3662,7 @@ mod tests {
         let zipped_fn = zip_kps(&name_kp, &age_kp);
         let result = zipped_fn(&user);
 
-        assert_eq!(result, Some((&"Alice".to_string(), &30)));
+        assert_eq!(result, Some((&"Akash".to_string(), &30)));
     }
 
     #[test]
@@ -3799,7 +4261,7 @@ mod tests {
         }
 
         let user = User {
-            name: "Alice".to_string(),
+            name: "Akash".to_string(),
             age: 30,
             score: 95.5,
             active: true,
@@ -3831,7 +4293,7 @@ mod tests {
         assert_eq!(string_kps.len(), 1);
         assert_eq!(
             string_kps[0].get_as::<String>(&user),
-            Some(&"Alice".to_string())
+            Some(&"Akash".to_string())
         );
 
         // Filter for i32 types
@@ -4830,8 +5292,10 @@ mod tests {
             Kp::new(|r: &Root| Some(&r.guard), |r: &mut Root| Some(&mut r.guard));
 
         let lock_kp = {
-            let prev: KpType<Arc<Mutex<Level1>>, Arc<Mutex<Level1>>> =
-                Kp::new(|g: &Arc<Mutex<Level1>>| Some(g), |g: &mut Arc<Mutex<Level1>>| Some(g));
+            let prev: KpType<Arc<Mutex<Level1>>, Arc<Mutex<Level1>>> = Kp::new(
+                |g: &Arc<Mutex<Level1>>| Some(g),
+                |g: &mut Arc<Mutex<Level1>>| Some(g),
+            );
             let next: KpType<Level1, Level1> =
                 Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
             crate::lock::LockKp::new(prev, crate::lock::ArcMutexAccess::new(), next)
@@ -4874,12 +5338,16 @@ mod tests {
             }))),
         };
 
-        let kp_msg: KpType<RootWithEnum, Arc<Mutex<Message>>> =
-            Kp::new(|r: &RootWithEnum| Some(&r.msg), |r: &mut RootWithEnum| Some(&mut r.msg));
+        let kp_msg: KpType<RootWithEnum, Arc<Mutex<Message>>> = Kp::new(
+            |r: &RootWithEnum| Some(&r.msg),
+            |r: &mut RootWithEnum| Some(&mut r.msg),
+        );
 
         let lock_kp_msg = {
-            let prev: KpType<Arc<Mutex<Message>>, Arc<Mutex<Message>>> =
-                Kp::new(|m: &Arc<Mutex<Message>>| Some(m), |m: &mut Arc<Mutex<Message>>| Some(m));
+            let prev: KpType<Arc<Mutex<Message>>, Arc<Mutex<Message>>> = Kp::new(
+                |m: &Arc<Mutex<Message>>| Some(m),
+                |m: &mut Arc<Mutex<Message>>| Some(m),
+            );
             let next: KpType<Message, Message> =
                 Kp::new(|m: &Message| Some(m), |m: &mut Message| Some(m));
             crate::lock::LockKp::new(prev, crate::lock::ArcMutexAccess::new(), next)
@@ -4897,8 +5365,8 @@ mod tests {
     #[cfg(all(feature = "tokio", feature = "parking_lot"))]
     #[tokio::test]
     async fn test_kp_then_async_deep_chain() {
-        use std::sync::Arc;
         use crate::async_lock::{AsyncLockKp, TokioMutexAccess};
+        use std::sync::Arc;
 
         #[derive(Clone)]
         struct Root {
@@ -4940,9 +5408,9 @@ mod tests {
     #[cfg(all(feature = "tokio", feature = "parking_lot"))]
     #[tokio::test]
     async fn test_deep_nested_chain_kp_lock_async_lock_kp() {
-        use std::sync::{Arc, Mutex};
         use crate::async_lock::{AsyncLockKp, TokioMutexAccess};
-        use crate::lock::{LockKp, ArcMutexAccess};
+        use crate::lock::{ArcMutexAccess, LockKp};
+        use std::sync::{Arc, Mutex};
 
         // Root -> Arc<Mutex<L1>>
         #[derive(Clone)]
@@ -4976,13 +5444,17 @@ mod tests {
         // LockKp from Root -> Level1
         let identity_l1: KpType<Level1, Level1> =
             Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-        let kp_sync: KpType<Root, Arc<Mutex<Level1>>> =
-            Kp::new(|r: &Root| Some(&r.sync_mutex), |r: &mut Root| Some(&mut r.sync_mutex));
+        let kp_sync: KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+            |r: &Root| Some(&r.sync_mutex),
+            |r: &mut Root| Some(&mut r.sync_mutex),
+        );
         let lock_root_to_l1 = LockKp::new(kp_sync, ArcMutexAccess::new(), identity_l1);
 
         // Kp: Level1 -> Level2
-        let kp_l1_inner: KpType<Level1, Level2> =
-            Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+        let kp_l1_inner: KpType<Level1, Level2> = Kp::new(
+            |l: &Level1| Some(&l.inner),
+            |l: &mut Level1| Some(&mut l.inner),
+        );
 
         // Kp: Level2 -> Arc<TokioMutex<Level3>>
         let kp_l2_tokio: KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> = Kp::new(
@@ -5000,8 +5472,10 @@ mod tests {
         };
 
         // Kp: Level3 -> i32
-        let kp_l3_leaf: KpType<Level3, i32> =
-            Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+        let kp_l3_leaf: KpType<Level3, i32> = Kp::new(
+            |l: &Level3| Some(&l.leaf),
+            |l: &mut Level3| Some(&mut l.leaf),
+        );
 
         // Build chain: LockKp(Root->L1) . then(L1->L2) . then(L2->tokio) . then_async(tokio->L3) . then(L3->leaf)
         let step1 = lock_root_to_l1.then(kp_l1_inner);

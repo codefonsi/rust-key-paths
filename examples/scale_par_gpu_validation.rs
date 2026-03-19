@@ -4,10 +4,10 @@
 //! for GPU transfer, adaptive dispatch config, and parallel buffer scaling — all via keypaths.
 
 use key_paths_iter::scale_par::{
-    adaptive_gpu_dispatch, count_nodes_by_kind, extract_gpu_data, par_flat_map_buffer_data,
-    par_scale_buffers, par_validate_buffers_non_empty, preprocess_sort_pairs, process_gpu_results,
-    slice_collection, validate_for_gpu, GpuBuffer, GpuComputePipeline, InteractionNet, NetNode,
-    NodeKind,
+    GpuBuffer, GpuComputePipeline, InteractionNet, NetNode, NodeKind, adaptive_gpu_dispatch,
+    count_nodes_by_kind, extract_gpu_data, par_flat_map_buffer_data, par_scale_buffers,
+    par_validate_buffers_non_empty, preprocess_sort_pairs, process_gpu_results, slice_collection,
+    validate_for_gpu,
 };
 use rust_key_paths::Kp;
 use rust_key_paths::KpType;
@@ -51,10 +51,15 @@ fn main() {
                     } else {
                         NodeKind::Ref
                     };
-                    NetNode::new(kind, [i as u32 % 100, (i + 1) as u32 % 100, (i + 2) as u32 % 100])
+                    NetNode::new(
+                        kind,
+                        [i as u32 % 100, (i + 1) as u32 % 100, (i + 2) as u32 % 100],
+                    )
                 })
                 .collect(),
-            active_pairs: (0..2000).map(|i| (i as u32 % 500, (i + 1) as u32 % 500)).collect(),
+            active_pairs: (0..2000)
+                .map(|i| (i as u32 % 500, (i + 1) as u32 % 500))
+                .collect(),
         },
     };
 
@@ -88,7 +93,10 @@ fn main() {
 
     // 5) Slice for batching (e.g. stream to GPU in chunks)
     let batch = slice_collection(&pairs_kp, &pipeline, 0, 100);
-    println!("First batch of pairs (slice 0..100): {} pairs.", batch.len());
+    println!(
+        "First batch of pairs (slice 0..100): {} pairs.",
+        batch.len()
+    );
 
     // 6) Keypath to buffers: we need a keypath to pipeline.cpu_state.buffers
     let buffers_kp: KpType<'static, GpuComputePipeline, Vec<GpuBuffer>> = Kp::new(

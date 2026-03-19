@@ -294,6 +294,40 @@ where
         })
     }
 
+    /// Like [get](LockKp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
+    #[inline]
+    pub fn get_optional(&self, root: Option<Root>) -> Option<Value>
+    where
+        V: Clone,
+    {
+        root.and_then(|r| self.get(r))
+    }
+
+    /// Like [get_mut](LockKp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
+    #[inline]
+    pub fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
+        root.and_then(|r| self.get_mut(r))
+    }
+
+    /// Returns the value if the keypath succeeds (root is `Some` and get returns `Some`), otherwise calls `f` and returns its result.
+    #[inline]
+    pub fn get_or_else<F>(&self, root: Option<Root>, f: F) -> Value
+    where
+        V: Clone,
+        F: FnOnce() -> Value,
+    {
+        self.get_optional(root).unwrap_or_else(f)
+    }
+
+    /// Returns the mutable value if the keypath succeeds (root is `Some` and get_mut returns `Some`), otherwise calls `f` and returns its result.
+    #[inline]
+    pub fn get_mut_or_else<F>(&self, root: Option<MutRoot>, f: F) -> MutValue
+    where
+        F: FnOnce() -> MutValue,
+    {
+        self.get_mut_optional(root).unwrap_or_else(f)
+    }
+
     /// Set the value through the lock using an updater function
     ///
     /// # NO CLONING Required!
@@ -351,8 +385,56 @@ where
         G1,
         S1,
         L,
-        impl Fn(MidValue) -> Option<Value2> + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
-        impl Fn(MutMid) -> Option<MutValue2> + use<G1, G2, G3, L, Lock, LockValue, Mid, MidValue, MutLock, MutMid, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S3, Value, Value2, V, V2>,
+        impl Fn(MidValue) -> Option<Value2>
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
+        impl Fn(MutMid) -> Option<MutValue2>
+        + use<
+            G1,
+            G2,
+            G3,
+            L,
+            Lock,
+            LockValue,
+            Mid,
+            MidValue,
+            MutLock,
+            MutMid,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S3,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
     >
     where
         V: 'static,
@@ -454,8 +536,74 @@ where
         G1,
         S1,
         L,
-        impl Fn(MidValue) -> Option<Value2> + use<G1, G2, G2_1, G2_2, L, L2, Lock, Lock2, LockValue, LockValue2, Mid, Mid2, MidValue, MidValue2, MutLock, MutLock2, MutMid, MutMid2, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S2_1, S2_2, Value, Value2, V, V2>,
-        impl Fn(MutMid) -> Option<MutValue2> + use<G1, G2, G2_1, G2_2, L, L2, Lock, Lock2, LockValue, LockValue2, Mid, Mid2, MidValue, MidValue2, MutLock, MutLock2, MutMid, MutMid2, MutRoot, MutValue, MutValue2, R, Root, S1, S2, S2_1, S2_2, Value, Value2, V, V2>,
+        impl Fn(MidValue) -> Option<Value2>
+        + use<
+            G1,
+            G2,
+            G2_1,
+            G2_2,
+            L,
+            L2,
+            Lock,
+            Lock2,
+            LockValue,
+            LockValue2,
+            Mid,
+            Mid2,
+            MidValue,
+            MidValue2,
+            MutLock,
+            MutLock2,
+            MutMid,
+            MutMid2,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S2_1,
+            S2_2,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
+        impl Fn(MutMid) -> Option<MutValue2>
+        + use<
+            G1,
+            G2,
+            G2_1,
+            G2_2,
+            L,
+            L2,
+            Lock,
+            Lock2,
+            LockValue,
+            LockValue2,
+            Mid,
+            Mid2,
+            MidValue,
+            MidValue2,
+            MutLock,
+            MutLock2,
+            MutMid,
+            MutMid2,
+            MutRoot,
+            MutValue,
+            MutValue2,
+            R,
+            Root,
+            S1,
+            S2,
+            S2_1,
+            S2_2,
+            Value,
+            Value2,
+            V,
+            V2,
+        >,
     >
     where
         V: 'static + Clone,
@@ -547,7 +695,8 @@ where
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
         AsyncKp::Value: crate::KeyPathValueTarget
             + std::borrow::Borrow<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
-        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
+        AsyncKp::MutValue:
+            std::borrow::BorrowMut<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
         <AsyncKp::Value as crate::KeyPathValueTarget>::Target: 'static,
     {
         crate::async_lock::KpThenAsyncKeyPath {
@@ -564,10 +713,12 @@ where
 
 /// Keypath that chains a [crate::Kp] with a [LockKp]. Use [crate::Kp::then_lock] to create.
 #[derive(Clone)]
-pub struct KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second> {
+pub struct KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
+{
     pub(crate) first: First,
     pub(crate) second: Second,
-    pub(crate) _p: std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
+    pub(crate) _p:
+        std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
 }
 
 impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
@@ -590,6 +741,40 @@ where
     pub fn get_mut(&self, root: MutRoot) -> Option<MutValue2> {
         let mut_v = self.first.sync_get_mut(root)?;
         self.second.sync_get_mut(mut_v)
+    }
+
+    /// Like [get](KpThenLockKp::get), but takes an optional root.
+    #[inline]
+    pub fn get_optional(&self, root: Option<Root>) -> Option<Value2>
+    where
+        Value2: Clone,
+    {
+        root.and_then(|r| self.get(r))
+    }
+
+    /// Like [get_mut](KpThenLockKp::get_mut), but takes an optional root.
+    #[inline]
+    pub fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue2> {
+        root.and_then(|r| self.get_mut(r))
+    }
+
+    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    pub fn get_or_else<F>(&self, root: Option<Root>, f: F) -> Value2
+    where
+        Value2: Clone,
+        F: FnOnce() -> Value2,
+    {
+        self.get_optional(root).unwrap_or_else(f)
+    }
+
+    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    pub fn get_mut_or_else<F>(&self, root: Option<MutRoot>, f: F) -> MutValue2
+    where
+        F: FnOnce() -> MutValue2,
+    {
+        self.get_mut_optional(root).unwrap_or_else(f)
     }
 }
 
@@ -1345,6 +1530,27 @@ pub type LockKpArcMutexFor<Root, Lock, Inner> = LockKp<
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
 >;
 
+/// Type alias for LockKp over Arc<std::sync::Mutex<Option<T>>>; value is T (extract from Option).
+pub type LockKpArcMutexOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ArcMutexAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
+>;
+
 /// Type alias for LockKp over Arc<std::sync::RwLock<T>>. Use with derive macro's `_lock()` methods.
 pub type LockKpArcRwLockFor<Root, Lock, Inner> = LockKp<
     Root,
@@ -1364,6 +1570,27 @@ pub type LockKpArcRwLockFor<Root, Lock, Inner> = LockKp<
     ArcRwLockAccess<Inner>,
     for<'b> fn(&'b Inner) -> Option<&'b Inner>,
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
+>;
+
+/// Type alias for LockKp over Arc<std::sync::RwLock<Option<T>>>; value is T (extract from Option).
+pub type LockKpArcRwLockOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ArcRwLockAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
 >;
 
 #[cfg(feature = "parking_lot")]
@@ -1389,6 +1616,28 @@ pub type LockKpParkingLotMutexFor<Root, Lock, Inner> = LockKp<
 >;
 
 #[cfg(feature = "parking_lot")]
+/// Type alias for LockKp over Arc<parking_lot::Mutex<Option<T>>>; value is T (extract from Option).
+pub type LockKpParkingLotMutexOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ParkingLotMutexAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
+>;
+
+#[cfg(feature = "parking_lot")]
 /// Type alias for LockKp over Arc<parking_lot::RwLock<T>>. Use with derive macro's `_lock()` methods.
 pub type LockKpParkingLotRwLockFor<Root, Lock, Inner> = LockKp<
     Root,
@@ -1408,6 +1657,28 @@ pub type LockKpParkingLotRwLockFor<Root, Lock, Inner> = LockKp<
     ParkingLotRwLockAccess<Inner>,
     for<'b> fn(&'b Inner) -> Option<&'b Inner>,
     for<'b> fn(&'b mut Inner) -> Option<&'b mut Inner>,
+>;
+
+#[cfg(feature = "parking_lot")]
+/// Type alias for LockKp over Arc<parking_lot::RwLock<Option<T>>>; value is T (extract from Option).
+pub type LockKpParkingLotRwLockOptionFor<Root, Lock, Inner> = LockKp<
+    Root,
+    Lock,
+    Option<Inner>,
+    Inner,
+    &'static Root,
+    &'static Lock,
+    &'static Option<Inner>,
+    &'static Inner,
+    &'static mut Root,
+    &'static mut Lock,
+    &'static mut Option<Inner>,
+    &'static mut Inner,
+    for<'b> fn(&'b Root) -> Option<&'b Lock>,
+    for<'b> fn(&'b mut Root) -> Option<&'b mut Lock>,
+    ParkingLotRwLockAccess<Option<Inner>>,
+    for<'b> fn(&'b Option<Inner>) -> Option<&'b Inner>,
+    for<'b> fn(&'b mut Option<Inner>) -> Option<&'b mut Inner>,
 >;
 
 /// Type alias for common LockKp usage with Arc<Mutex<T>>
@@ -1473,6 +1744,85 @@ mod tests {
         let value = lock_kp.get(&root);
         assert!(value.is_some());
         // Note: Direct comparison may not work due to lifetime issues in this simple test
+    }
+
+    #[test]
+    fn test_lock_kp_get_optional_or_else() {
+        #[derive(Debug, Clone)]
+        struct Root {
+            locked_data: Arc<Mutex<Inner>>,
+        }
+
+        #[derive(Debug, Clone)]
+        struct Inner {
+            value: i32,
+        }
+
+        let mut root = Root {
+            locked_data: Arc::new(Mutex::new(Inner { value: 42 })),
+        };
+
+        let prev_kp: KpType<Root, Arc<Mutex<Inner>>> = Kp::new(
+            |r: &Root| Some(&r.locked_data),
+            |r: &mut Root| Some(&mut r.locked_data),
+        );
+        let next_kp: KpType<Inner, i32> = Kp::new(
+            |i: &Inner| Some(&i.value),
+            |i: &mut Inner| Some(&mut i.value),
+        );
+        let lock_kp = LockKp::new(prev_kp, ArcMutexAccess::new(), next_kp);
+
+        // get_optional
+        assert!(lock_kp.get_optional(None).is_none());
+        assert_eq!(lock_kp.get_optional(Some(&root)), Some(&42));
+
+        // get_mut_optional
+        assert!(lock_kp.get_mut_optional(None).is_none());
+        if let Some(m) = lock_kp.get_mut_optional(Some(&mut root)) {
+            *m = 99;
+        }
+        assert_eq!(lock_kp.get(&root), Some(&99));
+
+        // get_or_else
+        static DEFAULT: i32 = -1;
+        let fallback = || &DEFAULT;
+        assert_eq!(*lock_kp.get_or_else(None, fallback), -1);
+        assert_eq!(*lock_kp.get_or_else(Some(&root), fallback), 99);
+
+        // get_mut_or_else: with Some we get the value; with None the fallback would be used (we only test Some here to avoid static mut)
+        let m_some = lock_kp.get_mut_or_else(Some(&mut root), || panic!("should not use fallback"));
+        *m_some = 100;
+        assert_eq!(lock_kp.get(&root), Some(&100));
+    }
+
+    #[test]
+    fn test_kp_then_lock_kp_get_optional_or_else() {
+        #[derive(Debug, Clone)]
+        struct Root {
+            data: Arc<Mutex<Mid>>,
+        }
+
+        #[derive(Debug, Clone)]
+        struct Mid {
+            value: i32,
+        }
+
+        let _root = Root {
+            data: Arc::new(Mutex::new(Mid { value: 10 })),
+        };
+
+        let prev: KpType<Root, Arc<Mutex<Mid>>> =
+            Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
+        let next: KpType<Mid, i32> =
+            Kp::new(|m: &Mid| Some(&m.value), |m: &mut Mid| Some(&mut m.value));
+        let lock_kp = LockKp::new(prev, ArcMutexAccess::new(), next);
+
+        assert!(lock_kp.get_optional(None).is_none());
+        assert_eq!(lock_kp.get_optional(Some(&_root)), Some(&10));
+
+        static DEF: i32 = -1;
+        assert_eq!(*lock_kp.get_or_else(None, || &DEF), -1);
+        assert_eq!(*lock_kp.get_or_else(Some(&_root), || &DEF), 10);
     }
 
     #[test]

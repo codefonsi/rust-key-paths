@@ -47,7 +47,10 @@ fn main() {
     println!("All keypaths (count = {}):", person_kps.len());
 
     for pkp in &person_kps {
-        println!("  root: Person, value: {}", type_id_name(pkp.value_type_id()));
+        println!(
+            "  root: Person, value: {}",
+            type_id_name(pkp.value_type_id())
+        );
     }
 
     println!("\nFilter: value_type_id == String");
@@ -56,7 +59,10 @@ fn main() {
         .filter(|pkp| pkp.value_type_id() == TypeId::of::<String>())
         .collect();
     for pkp in &string_kps {
-        println!("  root: Person, value: {}", type_id_name(pkp.value_type_id()));
+        println!(
+            "  root: Person, value: {}",
+            type_id_name(pkp.value_type_id())
+        );
     }
 
     println!("\nFilter: value_type_id == i32");
@@ -65,7 +71,10 @@ fn main() {
         .filter(|pkp| pkp.value_type_id() == TypeId::of::<i32>())
         .collect();
     for pkp in &i32_kps {
-        println!("  root: Person, value: {}", type_id_name(pkp.value_type_id()));
+        println!(
+            "  root: Person, value: {}",
+            type_id_name(pkp.value_type_id())
+        );
     }
 
     // ---- AKp (AnyKeyPath): Both Root and Value are type-erased ----

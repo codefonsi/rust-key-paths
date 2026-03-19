@@ -42,7 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // In-place: run kernel and write result back into model.weights
     let applied = gpu_weights.apply_one(&mut model, &ctx);
-    println!("apply_one: {}; model.weights = {:?}", applied, model.weights);
+    println!(
+        "apply_one: {}; model.weights = {:?}",
+        applied, model.weights
+    );
 
     // Chain kernels with .and_then_gpu
     let model2 = Model {

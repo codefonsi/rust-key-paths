@@ -1,11 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
-use std::rc::Rc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use key_paths_derive::Kp;
 use rust_key_paths::KpType;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 // cargo run --example drop_test 2>&1
-
 
 /// Increments a shared counter when dropped. Used to verify all fields are dropped after kp get/set.
 #[derive(Clone, Debug)]

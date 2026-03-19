@@ -166,11 +166,8 @@ impl AKpRunner {
     }
 
     fn run_numeric(&self, root: &dyn std::any::Any) -> Vec<Option<GpuValue>> {
-        let extracted: Vec<Option<GpuValue>> = self
-            .gpu_kps
-            .iter()
-            .map(|kp| (kp.extractor)(root))
-            .collect();
+        let extracted: Vec<Option<GpuValue>> =
+            self.gpu_kps.iter().map(|kp| (kp.extractor)(root)).collect();
 
         let Some(ctx) = &self.wgpu_ctx else {
             return extracted;
@@ -222,55 +219,65 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-        let module = ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("akp_shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(shader_src)),
-        });
+        let module = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("akp_shader"),
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(shader_src)),
+            });
 
-        let bind_group_layout = ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("akp_bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+        let bind_group_layout =
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("akp_bgl"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
 
-        let pipeline_layout = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("akp_pl"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("akp_pl"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
-        let pipeline = ctx.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("akp_pipeline"),
-            layout: Some(&pipeline_layout),
-            module: &module,
-            entry_point: "main",
-        });
+        let pipeline = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("akp_pipeline"),
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: "main",
+            });
 
-        let input_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("akp_input"),
-            contents: bytemuck::cast_slice(values),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+        let input_buf = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("akp_input"),
+                contents: bytemuck::cast_slice(values),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            });
         let output_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("akp_output"),
             size,

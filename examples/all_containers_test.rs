@@ -1,3 +1,5 @@
+use key_paths_derive::Kp;
+use rust_key_paths::KpType;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
@@ -5,8 +7,6 @@ use std::marker::PhantomData;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
-use key_paths_derive::Kp;
-use rust_key_paths::KpType;
 
 #[derive(Debug, Kp)]
 struct AllContainersTest {

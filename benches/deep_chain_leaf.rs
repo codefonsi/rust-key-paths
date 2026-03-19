@@ -6,15 +6,15 @@
 //! - Direct lock approach: sync_mutex.lock(), tokio_mutex.lock().await, then access leaf
 //! - Keypath approach: LockKp.then().then().then_async().then() chain
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::sync::{Arc, Mutex};
 
+#[cfg(all(feature = "tokio", feature = "parking_lot"))]
+use rust_key_paths::Kp;
 #[cfg(all(feature = "tokio", feature = "parking_lot"))]
 use rust_key_paths::async_lock::{AsyncLockKp, TokioMutexAccess};
 #[cfg(all(feature = "tokio", feature = "parking_lot"))]
 use rust_key_paths::lock::{ArcMutexAccess, LockKp};
-#[cfg(all(feature = "tokio", feature = "parking_lot"))]
-use rust_key_paths::Kp;
 #[cfg(all(feature = "tokio", feature = "parking_lot"))]
 use tokio::runtime::Runtime;
 
@@ -61,18 +61,21 @@ mod benches {
     pub fn build_and_get<'a>(root: &'a Root, rt: &Runtime) -> Option<&'a i32> {
         let identity_l1: rust_key_paths::KpType<Level1, Level1> =
             Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-        let kp_sync: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> =
-            Kp::new(|r: &Root| Some(&r.sync_mutex), |r: &mut Root| Some(&mut r.sync_mutex));
+        let kp_sync: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+            |r: &Root| Some(&r.sync_mutex),
+            |r: &mut Root| Some(&mut r.sync_mutex),
+        );
         let lock_root_to_l1 = LockKp::new(kp_sync, ArcMutexAccess::new(), identity_l1);
 
-        let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> =
-            Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+        let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> = Kp::new(
+            |l: &Level1| Some(&l.inner),
+            |l: &mut Level1| Some(&mut l.inner),
+        );
 
-        let kp_l2_tokio: rust_key_paths::KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> =
-            Kp::new(
-                |l: &Level2| Some(&l.tokio_mutex),
-                |l: &mut Level2| Some(&mut l.tokio_mutex),
-            );
+        let kp_l2_tokio: rust_key_paths::KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> = Kp::new(
+            |l: &Level2| Some(&l.tokio_mutex),
+            |l: &mut Level2| Some(&mut l.tokio_mutex),
+        );
 
         let async_l3 = {
             let prev: rust_key_paths::KpType<
@@ -84,8 +87,10 @@ mod benches {
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
         };
 
-        let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> =
-            Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+        let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> = Kp::new(
+            |l: &Level3| Some(&l.leaf),
+            |l: &mut Level3| Some(&mut l.leaf),
+        );
 
         let step1 = lock_root_to_l1.then(kp_l1_inner);
         let step2 = step1.then(kp_l2_tokio);
@@ -99,18 +104,21 @@ mod benches {
     pub fn build_and_get_mut<'a>(root: &'a mut Root, rt: &Runtime) -> Option<&'a mut i32> {
         let identity_l1: rust_key_paths::KpType<Level1, Level1> =
             Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
-        let kp_sync: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> =
-            Kp::new(|r: &Root| Some(&r.sync_mutex), |r: &mut Root| Some(&mut r.sync_mutex));
+        let kp_sync: rust_key_paths::KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+            |r: &Root| Some(&r.sync_mutex),
+            |r: &mut Root| Some(&mut r.sync_mutex),
+        );
         let lock_root_to_l1 = LockKp::new(kp_sync, ArcMutexAccess::new(), identity_l1);
 
-        let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> =
-            Kp::new(|l: &Level1| Some(&l.inner), |l: &mut Level1| Some(&mut l.inner));
+        let kp_l1_inner: rust_key_paths::KpType<Level1, Level2> = Kp::new(
+            |l: &Level1| Some(&l.inner),
+            |l: &mut Level1| Some(&mut l.inner),
+        );
 
-        let kp_l2_tokio: rust_key_paths::KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> =
-            Kp::new(
-                |l: &Level2| Some(&l.tokio_mutex),
-                |l: &mut Level2| Some(&mut l.tokio_mutex),
-            );
+        let kp_l2_tokio: rust_key_paths::KpType<Level2, Arc<tokio::sync::Mutex<Level3>>> = Kp::new(
+            |l: &Level2| Some(&l.tokio_mutex),
+            |l: &mut Level2| Some(&mut l.tokio_mutex),
+        );
 
         let async_l3 = {
             let prev: rust_key_paths::KpType<
@@ -122,8 +130,10 @@ mod benches {
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
         };
 
-        let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> =
-            Kp::new(|l: &Level3| Some(&l.leaf), |l: &mut Level3| Some(&mut l.leaf));
+        let kp_l3_leaf: rust_key_paths::KpType<Level3, i32> = Kp::new(
+            |l: &Level3| Some(&l.leaf),
+            |l: &mut Level3| Some(&mut l.leaf),
+        );
 
         let step1 = lock_root_to_l1.then(kp_l1_inner);
         let step2 = step1.then(kp_l2_tokio);
@@ -135,7 +145,7 @@ mod benches {
 
 #[cfg(all(feature = "tokio", feature = "parking_lot"))]
 fn bench_deep_chain_leaf_read(c: &mut Criterion) {
-    use crate::benches::{build_and_get, make_root, Level3};
+    use crate::benches::{Level3, build_and_get, make_root};
 
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("deep_chain_leaf_read");
@@ -171,7 +181,7 @@ fn bench_deep_chain_leaf_read(c: &mut Criterion) {
 
 #[cfg(all(feature = "tokio", feature = "parking_lot"))]
 fn bench_deep_chain_leaf_write(c: &mut Criterion) {
-    use crate::benches::{build_and_get_mut, make_root, Level3};
+    use crate::benches::{Level3, build_and_get_mut, make_root};
 
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("deep_chain_leaf_write");

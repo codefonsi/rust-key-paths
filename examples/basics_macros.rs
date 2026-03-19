@@ -21,7 +21,7 @@ fn main() {
         },
         name: "MyRect".into(),
     };
-    
+
     // Keypaths from derive-generated methods
     // Note: size and name are NOT Option types, so they use () methods, not _fw()
     let rect_size_w = Rectangle::size();
@@ -33,8 +33,7 @@ fn main() {
     println!("Name (readable): {:?}", name_readable.get(&rect));
 
     let size_writable = Rectangle::size();
-    if let Some(s) = size_writable.get_mut(&mut rect)
-    {
+    if let Some(s) = size_writable.get_mut(&mut rect) {
         s.width += 1;
     }
 
