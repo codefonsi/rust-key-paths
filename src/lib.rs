@@ -945,6 +945,57 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, 
     }
 }
 
+pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>: KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+    // /// Map the value through a transformation function
+    // /// Returns a new keypath that transforms the value when accessed
+    // ///
+    // /// # Example
+    // /// ```
+    // /// use rust_key_paths::{Kp, KpType};
+    // /// struct User { name: String }
+    // /// let user = User { name: "Akash".to_string() };
+    // /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
+    // /// let len_kp = name_kp.map(|name: &String| name.len());
+    // /// assert_eq!(len_kp.get(&user), Some(5));
+    // /// ```
+    // fn map<MappedValue, F>(
+    //     &self,
+    //     mapper: F,
+    // ) -> Kp<
+    //     R,
+    //     MappedValue,
+    //     Root,
+    //     MappedValue,
+    //     MutRoot,
+    //     MappedValue,
+    //     impl Fn(Root) -> Option<MappedValue>,
+    //     impl Fn(MutRoot) -> Option<MappedValue>,
+    // >
+    // where
+    //     // Copy: Required because mapper is used in both getter and setter closures
+    //     // 'static: Required because the returned Kp must own its closures
+    //     F: Fn(&V) -> MappedValue + Copy + 'static,
+    //     V: 'static,
+    //     MappedValue: 'static,
+    // {
+    //     Kp::new(
+    //         move |root: Root| {
+    //             &self.get(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //         move |root: MutRoot| {
+    //             &self.get_mut(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //     )
+    // }
+
+}
+
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -1215,54 +1266,6 @@ where
             second: async_kp,
             _p: std::marker::PhantomData,
         }
-    }
-
-    /// Map the value through a transformation function
-    /// Returns a new keypath that transforms the value when accessed
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType};
-    /// struct User { name: String }
-    /// let user = User { name: "Akash".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-    /// let len_kp = name_kp.map(|name: &String| name.len());
-    /// assert_eq!(len_kp.get(&user), Some(5));
-    /// ```
-    pub fn map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> Kp<
-        R,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue>,
-        impl Fn(MutRoot) -> Option<MappedValue>,
-    >
-    where
-        // Copy: Required because mapper is used in both getter and setter closures
-        // 'static: Required because the returned Kp must own its closures
-        F: Fn(&V) -> MappedValue + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                (&self.get)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-            move |root: MutRoot| {
-                (&self.set)(root).map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-        )
     }
 
     /// Zip two keypaths on the same root: get returns `Some((a, b))` when both succeed, else `None`.
