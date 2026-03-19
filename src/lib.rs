@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 // Export the lock module
 pub mod lock;
 pub mod prelude;
+
 pub use lock::{
     ArcMutexAccess, ArcRwLockAccess, LockAccess, LockKp, LockKpType, RcRefCellAccess,
     StdMutexAccess, StdRwLockAccess,
@@ -285,6 +286,18 @@ pub type KpType<'a, R, V> = Kp<
     for<'b> fn(&'b R) -> Option<&'b V>,
     for<'b> fn(&'b mut R) -> Option<&'b mut V>,
 >;
+
+pub type KpTraitType<'a, R, V> = dyn KpTrait<
+    R,
+    V,
+    &'a R,
+    &'a V,
+    &'a mut R,
+    &'a mut V,
+    for<'b> fn(&'b R) -> Option<&'b V>,
+    for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+>;
+
 
 /// Keypath for `Option<RefCell<T>>`: `get` returns `Option<Ref<V>>` so the caller holds the guard.
 /// Use `.get(root).as_ref().map(std::cell::Ref::deref)` to get `Option<&V>` while the `Ref` is in scope.
