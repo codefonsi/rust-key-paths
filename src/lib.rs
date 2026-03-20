@@ -1332,7 +1332,7 @@ where
     }
 }
 
-pub trait HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
+pub trait HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
     KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -1829,7 +1829,7 @@ where
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S>
-    HOFTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -1840,6 +1840,20 @@ where
     S: Fn(MutRoot) -> Option<MutValue>,
 {
 }
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S>
+    AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+}
+
 /// AKp (AnyKeyPath) - Hides both Root and Value types
 /// Most flexible keypath type for heterogeneous collections
 /// Uses dynamic dispatch and type checking at runtime
