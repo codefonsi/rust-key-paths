@@ -2,6 +2,8 @@
 //!
 //! Run with: `cargo run --example basics`
 
+use std::{cell::{Cell, RefCell}, ops::{Deref, DerefMut}, rc::Rc};
+
 use key_paths_derive::Kp;
 use rust_key_paths::{Kp, KpDynamic, KpType};
 
@@ -26,9 +28,33 @@ struct Size {
 #[derive(Debug, Kp)]
 struct Rectangle {
     size: Size,
-    name: String,
+    name: Rc<RefCell<String>>,
 }
 
+impl Rectangle {
+    // fn kp() -> KpType<'static, Rectangle, String> {
+    //     KpType::new(
+    //         |root| { 
+    //             let x = root.name.borrow();
+    //             let y = &*x as *const String;
+    //             Some(unsafe { &*y })}
+    //         ,|root| { 
+    //             let mut x = root.name.borrow_mut();
+    //             let y = &mut *x as *mut String;
+    //             Some(unsafe {&mut *y})
+    //         }
+    //     )
+    // }
+
+
+    // fn kp() -> KpType<'static, Rectangle, std::cell::Ref<'static, String>> {
+    //     KpType::new(
+    //         |root| { Some(&'static root.name.borrow()) }
+    //         ,|_| { None }
+    //     )
+    // }
+
+}
 // Standalone fn pointers for keypath (reference: lib.rs identity_typed / Kp with fn types)
 
 impl Rectangle {
@@ -70,5 +96,8 @@ fn main() {
             *w += 50;
         }
     }
+
+    // let x = Rectangle::kp().get(todo!());
+    // let x = Rectangle::kp().get_mut(todo!());
     println!("Updated rectangle: {:?}", rect);
 }

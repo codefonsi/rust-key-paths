@@ -40,3 +40,4 @@ tokio = ["dep:tokio"]
 [dev-dependencies]
 tagged-core = "1.0.1"
 pin-project = "1.1"
+key-paths-derive = { path = "key-paths-derive" }
