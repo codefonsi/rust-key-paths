@@ -29,10 +29,8 @@
 //!    - Only clones `PhantomData<T>` which is zero-sized
 //!    - Compiled away completely - zero runtime cost
 
-use crate::{Kp, KpTrait};
+use crate::{Kp};
 use async_trait::async_trait;
-use std::sync::Arc;
-
 // Re-export tokio sync types for convenience
 #[cfg(feature = "tokio")]
 pub use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -42,7 +40,7 @@ pub use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
 // =============================================================================
 //
 // - AsyncLockLike<Lock, Inner>: One "step" through a lock. Given a Lock (e.g.
-//   Arc<Mutex<T>>), it async yields Inner (e.g. &T). Used by the `mid` field of
+//   std::sync::Arc<Mutex<T>>), it async yields Inner (e.g. &T). Used by the `mid` field of
 //   AsyncLockKp to go from "container" to "value inside the lock". Implemented
 //   by TokioMutexAccess, TokioRwLockAccess, etc.
 //
@@ -235,16 +233,16 @@ pub trait AsyncKeyPathLike<Root, MutRoot> {
     async fn get_mut(&self, root: MutRoot) -> Option<Self::MutValue>;
 }
 
-/// An async keypath that handles async locked values (e.g., Arc<tokio::sync::Mutex<T>>)
+/// An async keypath that handles async locked values (e.g., std::sync::Arc<tokio::sync::Mutex<T>>)
 ///
 /// Structure:
-/// - `prev`: Keypath from Root to Lock container (e.g., Arc<tokio::sync::Mutex<Mid>>)
+/// - `prev`: Keypath from Root to Lock container (e.g., std::sync::Arc<tokio::sync::Mutex<Mid>>)
 /// - `mid`: Async lock access handler that goes from Lock to Inner value
 /// - `next`: Keypath from Inner value to final Value
 ///
 /// # Type Parameters
 /// - `R`: Root type (base)
-/// - `Lock`: Lock container type (e.g., Arc<tokio::sync::Mutex<Mid>>)
+/// - `Lock`: Lock container type (e.g., std::sync::Arc<tokio::sync::Mutex<Mid>>)
 /// - `Mid`: The type inside the lock
 /// - `V`: Final value type
 /// - Rest are the same generic parameters as Kp
@@ -382,7 +380,7 @@ where
     where
         Lock: Clone,
     {
-        // SHALLOW CLONE: For Arc<Mutex<T>>, only increments Arc refcount
+        // SHALLOW CLONE: For std::sync::Arc<Mutex<T>>, only increments Arc refcount
         // The actual data T is NOT cloned
         let lock_value = (self.prev.get)(root)?;
         let lock: &Lock = lock_value.borrow();
@@ -401,7 +399,7 @@ where
     where
         Lock: Clone,
     {
-        // SHALLOW CLONE: For Arc<Mutex<T>>, only increments Arc refcount
+        // SHALLOW CLONE: For std::sync::Arc<Mutex<T>>, only increments Arc refcount
         let mut lock_value = (self.prev.set)(root)?;
         let lock: &mut Lock = lock_value.borrow_mut();
         let mut lock_clone = lock.clone(); // SHALLOW: Arc refcount++
@@ -468,13 +466,13 @@ where
         Lock: Clone,
         F: FnOnce(&mut V),
     {
-        // SHALLOW CLONE: For Arc<Mutex<T>>, only increments Arc refcount
+        // SHALLOW CLONE: For std::sync::Arc<Mutex<T>>, only increments Arc refcount
         let lock_value = (self.prev.get)(root).ok_or("Failed to get lock from root")?;
         let lock: &Lock = lock_value.borrow();
         let lock_clone = lock.clone(); // SHALLOW: Arc refcount++
 
         // Async lock and get the mid value
-        let mut mid_value = self
+        let mid_value = self
             .mid
             .lock_read(&lock_clone)
             .await
@@ -499,7 +497,7 @@ where
     ///
     /// # Example
     /// ```ignore
-    /// // Root -> Arc<tokio::Mutex<Inner>> -> Inner -> field
+    /// // Root -> std::sync::Arc<tokio::Mutex<Inner>> -> Inner -> field
     /// let async_kp = AsyncLockKp::new(root_to_lock, TokioMutexAccess::new(), lock_to_inner);
     /// let field_kp = Kp::new(|inner: &Inner| Some(&inner.field), |inner: &mut Inner| Some(&mut inner.field));
     /// let chained = async_kp.then(field_kp);
@@ -695,7 +693,7 @@ where
     ///
     /// # Example
     /// ```ignore
-    /// // Root -> Arc<tokio::Mutex<Container>> -> Container -> Arc<tokio::Mutex<Value>> -> Value
+    /// // Root -> std::sync::Arc<tokio::Mutex<Container>> -> Container -> std::sync::Arc<tokio::Mutex<Value>> -> Value
     /// let async_kp1 = AsyncLockKp::new(...); // Root -> Container
     /// let async_kp2 = AsyncLockKp::new(...); // Container -> Value
     /// let chained = async_kp1.then_async(async_kp2);
@@ -1803,7 +1801,7 @@ where
 // ============================================================================
 
 #[cfg(feature = "tokio")]
-/// Async lock access implementation for Arc<tokio::sync::Mutex<T>>
+/// Async lock access implementation for std::sync::Arc<tokio::sync::Mutex<T>>
 ///
 /// # Cloning Behavior
 ///
@@ -1833,11 +1831,11 @@ impl<T> Default for TokioMutexAccess<T> {
 // Implementation for immutable access
 #[cfg(feature = "tokio")]
 #[async_trait]
-impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a T>
+impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::Mutex<T>>, &'a T>
     for TokioMutexAccess<T>
 {
     #[inline]
-    async fn lock_read(&self, lock: &Arc<tokio::sync::Mutex<T>>) -> Option<&'a T> {
+    async fn lock_read(&self, lock: &std::sync::Arc<tokio::sync::Mutex<T>>) -> Option<&'a T> {
         // SHALLOW CLONE: Only Arc refcount is incremented
         let guard = lock.lock().await;
         let ptr = &*guard as *const T;
@@ -1845,7 +1843,7 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a
     }
 
     #[inline]
-    async fn lock_write(&self, lock: &mut Arc<tokio::sync::Mutex<T>>) -> Option<&'a T> {
+    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::Mutex<T>>) -> Option<&'a T> {
         let guard = lock.lock().await;
         let ptr = &*guard as *const T;
         unsafe { Some(&*ptr) }
@@ -1855,11 +1853,11 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a
 // Implementation for mutable access
 #[cfg(feature = "tokio")]
 #[async_trait]
-impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a mut T>
+impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::Mutex<T>>, &'a mut T>
     for TokioMutexAccess<T>
 {
     #[inline]
-    async fn lock_read(&self, lock: &Arc<tokio::sync::Mutex<T>>) -> Option<&'a mut T> {
+    async fn lock_read(&self, lock: &std::sync::Arc<tokio::sync::Mutex<T>>) -> Option<&'a mut T> {
         // SHALLOW CLONE: Only Arc refcount is incremented
         let mut guard = lock.lock().await;
         let ptr = &mut *guard as *mut T;
@@ -1867,7 +1865,7 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a
     }
 
     #[inline]
-    async fn lock_write(&self, lock: &mut Arc<tokio::sync::Mutex<T>>) -> Option<&'a mut T> {
+    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::Mutex<T>>) -> Option<&'a mut T> {
         let mut guard = lock.lock().await;
         let ptr = &mut *guard as *mut T;
         unsafe { Some(&mut *ptr) }
@@ -1879,7 +1877,7 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::Mutex<T>>, &'a
 // ============================================================================
 
 #[cfg(feature = "tokio")]
-/// Async lock access implementation for Arc<tokio::sync::RwLock<T>>
+/// Async lock access implementation for std::sync::Arc<tokio::sync::RwLock<T>>
 ///
 /// # Cloning Behavior
 ///
@@ -1918,17 +1916,17 @@ impl<T> Clone for TokioRwLockAccess<T> {
 // Implementation for immutable access (read lock)
 #[cfg(feature = "tokio")]
 #[async_trait]
-impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::RwLock<T>>, &'a T>
+impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::RwLock<T>>, &'a T>
     for TokioRwLockAccess<T>
 {
-    async fn lock_read(&self, lock: &Arc<tokio::sync::RwLock<T>>) -> Option<&'a T> {
+    async fn lock_read(&self, lock: &std::sync::Arc<tokio::sync::RwLock<T>>) -> Option<&'a T> {
         // SHALLOW CLONE: Only Arc refcount is incremented
         let guard = lock.read().await;
         let ptr = &*guard as *const T;
         unsafe { Some(&*ptr) }
     }
 
-    async fn lock_write(&self, lock: &mut Arc<tokio::sync::RwLock<T>>) -> Option<&'a T> {
+    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::RwLock<T>>) -> Option<&'a T> {
         // For immutable access, use read lock
         let guard = lock.read().await;
         let ptr = &*guard as *const T;
@@ -1939,17 +1937,17 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::RwLock<T>>, &'
 // Implementation for mutable access (write lock)
 #[cfg(feature = "tokio")]
 #[async_trait]
-impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::RwLock<T>>, &'a mut T>
+impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::RwLock<T>>, &'a mut T>
     for TokioRwLockAccess<T>
 {
-    async fn lock_read(&self, lock: &Arc<tokio::sync::RwLock<T>>) -> Option<&'a mut T> {
+    async fn lock_read(&self, lock: &std::sync::Arc<tokio::sync::RwLock<T>>) -> Option<&'a mut T> {
         // For mutable access, use write lock
         let mut guard = lock.write().await;
         let ptr = &mut *guard as *mut T;
         unsafe { Some(&mut *ptr) }
     }
 
-    async fn lock_write(&self, lock: &mut Arc<tokio::sync::RwLock<T>>) -> Option<&'a mut T> {
+    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::RwLock<T>>) -> Option<&'a mut T> {
         // SHALLOW CLONE: Only Arc refcount is incremented
         let mut guard = lock.write().await;
         let ptr = &mut *guard as *mut T;
@@ -1965,7 +1963,7 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<Arc<tokio::sync::RwLock<T>>, &'
 // with a root, not when the keypath is constructed.
 
 #[cfg(feature = "tokio")]
-/// Type alias for AsyncLockKp over Arc<tokio::sync::Mutex<T>>. Use with derive macro's `_async()` methods.
+/// Type alias for AsyncLockKp over std::sync::Arc<tokio::sync::Mutex<T>>. Use with derive macro's `_async()` methods.
 pub type AsyncLockKpMutexFor<Root, Lock, Inner> = AsyncLockKp<
     Root,
     Lock,
@@ -1987,7 +1985,7 @@ pub type AsyncLockKpMutexFor<Root, Lock, Inner> = AsyncLockKp<
 >;
 
 #[cfg(feature = "tokio")]
-/// Type alias for AsyncLockKp over Arc<tokio::sync::RwLock<T>>. Use with derive macro's `_async()` methods.
+/// Type alias for AsyncLockKp over std::sync::Arc<tokio::sync::RwLock<T>>. Use with derive macro's `_async()` methods.
 pub type AsyncLockKpRwLockFor<Root, Lock, Inner> = AsyncLockKp<
     Root,
     Lock,
@@ -2023,16 +2021,16 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<Mutex<String>>,
+            data: std::sync::Arc<Mutex<String>>,
         }
 
         let root = Root {
-            data: Arc::new(Mutex::new("hello".to_string())),
+            data: std::sync::Arc::new(Mutex::new("hello".to_string())),
         };
 
         // Create AsyncLockKp
         let lock_kp = {
-            let prev: KpType<Root, Arc<Mutex<String>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<String>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<String, String> =
                 Kp::new(|s: &String| Some(s), |s: &mut String| Some(s));
@@ -2051,15 +2049,15 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<Mutex<i32>>,
+            data: std::sync::Arc<Mutex<i32>>,
         }
 
         let mut root = Root {
-            data: Arc::new(Mutex::new(42)),
+            data: std::sync::Arc::new(Mutex::new(42)),
         };
 
         let lock_kp = {
-            let prev: KpType<Root, Arc<Mutex<i32>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<i32>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<i32, i32> = Kp::new(|n: &i32| Some(n), |n: &mut i32| Some(n));
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
@@ -2094,16 +2092,16 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<RwLock<Vec<i32>>>,
+            data: std::sync::Arc<RwLock<Vec<i32>>>,
         }
 
         let root = Root {
-            data: Arc::new(RwLock::new(vec![1, 2, 3, 4, 5])),
+            data: std::sync::Arc::new(RwLock::new(vec![1, 2, 3, 4, 5])),
         };
 
         // Create AsyncLockKp with RwLock
         let lock_kp = {
-            let prev: KpType<Root, Arc<RwLock<Vec<i32>>>> =
+            let prev: KpType<Root, std::sync::Arc<RwLock<Vec<i32>>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<Vec<i32>, Vec<i32>> =
                 Kp::new(|v: &Vec<i32>| Some(v), |v: &mut Vec<i32>| Some(v));
@@ -2122,16 +2120,16 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<RwLock<i32>>,
+            data: std::sync::Arc<RwLock<i32>>,
         }
 
         let root = Root {
-            data: Arc::new(RwLock::new(42)),
+            data: std::sync::Arc::new(RwLock::new(42)),
         };
 
         // Create AsyncLockKp
         let lock_kp = {
-            let prev: KpType<Root, Arc<RwLock<i32>>> =
+            let prev: KpType<Root, std::sync::Arc<RwLock<i32>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<i32, i32> = Kp::new(|n: &i32| Some(n), |n: &mut i32| Some(n));
             AsyncLockKp::new(prev, TokioRwLockAccess::new(), next)
@@ -2140,7 +2138,7 @@ mod tests {
         // Concurrent async reads in the same task (spawn would require 'static future;
         // get() returns references so we use join! instead)
         let lock_kp2 = {
-            let prev: KpType<Root, Arc<RwLock<i32>>> =
+            let prev: KpType<Root, std::sync::Arc<RwLock<i32>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<i32, i32> = Kp::new(|n: &i32| Some(n), |n: &mut i32| Some(n));
             AsyncLockKp::new(prev, TokioRwLockAccess::new(), next)
@@ -2171,7 +2169,7 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            level1: Arc<Mutex<Level1>>,
+            level1: std::sync::Arc<Mutex<Level1>>,
         }
 
         struct Level1 {
@@ -2187,7 +2185,7 @@ mod tests {
 
         // Create structure with PanicOnClone
         let root = Root {
-            level1: Arc::new(Mutex::new(Level1 {
+            level1: std::sync::Arc::new(Mutex::new(Level1 {
                 panic_data: PanicOnClone {
                     data: "test".to_string(),
                 },
@@ -2197,7 +2195,7 @@ mod tests {
 
         // Create AsyncLockKp
         let lock_kp = {
-            let prev: KpType<Root, Arc<Mutex<Level1>>> = Kp::new(
+            let prev: KpType<Root, std::sync::Arc<Mutex<Level1>>> = Kp::new(
                 |r: &Root| Some(&r.level1),
                 |r: &mut Root| Some(&mut r.level1),
             );
@@ -2221,11 +2219,11 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<Mutex<String>>,
+            data: std::sync::Arc<Mutex<String>>,
         }
 
         let lock_kp = {
-            let prev: KpType<Root, Arc<Mutex<String>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<String>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<String, String> =
                 Kp::new(|s: &String| Some(s), |s: &mut String| Some(s));
@@ -2244,7 +2242,7 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            data: Arc<Mutex<Inner>>,
+            data: std::sync::Arc<Mutex<Inner>>,
         }
 
         #[derive(Clone)]
@@ -2253,12 +2251,12 @@ mod tests {
         }
 
         let root = Root {
-            data: Arc::new(Mutex::new(Inner { value: 42 })),
+            data: std::sync::Arc::new(Mutex::new(Inner { value: 42 })),
         };
 
         // Create AsyncLockKp to Inner
         let async_kp = {
-            let prev: KpType<Root, Arc<Mutex<Inner>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<Inner>>> =
                 Kp::new(|r: &Root| Some(&r.data), |r: &mut Root| Some(&mut r.data));
             let next: KpType<Inner, Inner> = Kp::new(|i: &Inner| Some(i), |i: &mut Inner| Some(i));
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
@@ -2281,23 +2279,23 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            lock1: Arc<Mutex<Container>>,
+            lock1: std::sync::Arc<Mutex<Container>>,
         }
 
         #[derive(Clone)]
         struct Container {
-            lock2: Arc<Mutex<i32>>,
+            lock2: std::sync::Arc<Mutex<i32>>,
         }
 
         let root = Root {
-            lock1: Arc::new(Mutex::new(Container {
-                lock2: Arc::new(Mutex::new(999)),
+            lock1: std::sync::Arc::new(Mutex::new(Container {
+                lock2: std::sync::Arc::new(Mutex::new(999)),
             })),
         };
 
         // First AsyncLockKp: Root -> Container
         let async_kp1 = {
-            let prev: KpType<Root, Arc<Mutex<Container>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<Container>>> =
                 Kp::new(|r: &Root| Some(&r.lock1), |r: &mut Root| Some(&mut r.lock1));
             let next: KpType<Container, Container> =
                 Kp::new(|c: &Container| Some(c), |c: &mut Container| Some(c));
@@ -2306,7 +2304,7 @@ mod tests {
 
         // Second AsyncLockKp: Container -> i32
         let async_kp2 = {
-            let prev: KpType<Container, Arc<Mutex<i32>>> = Kp::new(
+            let prev: KpType<Container, std::sync::Arc<Mutex<i32>>> = Kp::new(
                 |c: &Container| Some(&c.lock2),
                 |c: &mut Container| Some(&mut c.lock2),
             );
@@ -2326,41 +2324,41 @@ mod tests {
 
         #[derive(Clone)]
         struct Root {
-            a: Arc<Mutex<Level1>>,
+            a: std::sync::Arc<Mutex<Level1>>,
         }
         #[derive(Clone)]
         struct Level1 {
-            b: Arc<Mutex<Level2>>,
+            b: std::sync::Arc<Mutex<Level2>>,
         }
         #[derive(Clone)]
         struct Level2 {
-            c: Arc<Mutex<i32>>,
+            c: std::sync::Arc<Mutex<i32>>,
         }
 
         let root = Root {
-            a: Arc::new(Mutex::new(Level1 {
-                b: Arc::new(Mutex::new(Level2 {
-                    c: Arc::new(Mutex::new(42)),
+            a: std::sync::Arc::new(Mutex::new(Level1 {
+                b: std::sync::Arc::new(Mutex::new(Level2 {
+                    c: std::sync::Arc::new(Mutex::new(42)),
                 })),
             })),
         };
 
         let kp1 = {
-            let prev: KpType<Root, Arc<Mutex<Level1>>> =
+            let prev: KpType<Root, std::sync::Arc<Mutex<Level1>>> =
                 Kp::new(|r: &Root| Some(&r.a), |r: &mut Root| Some(&mut r.a));
             let next: KpType<Level1, Level1> =
                 Kp::new(|l: &Level1| Some(l), |l: &mut Level1| Some(l));
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
         };
         let kp2 = {
-            let prev: KpType<Level1, Arc<Mutex<Level2>>> =
+            let prev: KpType<Level1, std::sync::Arc<Mutex<Level2>>> =
                 Kp::new(|l: &Level1| Some(&l.b), |l: &mut Level1| Some(&mut l.b));
             let next: KpType<Level2, Level2> =
                 Kp::new(|l: &Level2| Some(l), |l: &mut Level2| Some(l));
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
         };
         let kp3 = {
-            let prev: KpType<Level2, Arc<Mutex<i32>>> =
+            let prev: KpType<Level2, std::sync::Arc<Mutex<i32>>> =
                 Kp::new(|l: &Level2| Some(&l.c), |l: &mut Level2| Some(&mut l.c));
             let next: KpType<i32, i32> = Kp::new(|n: &i32| Some(n), |n: &mut i32| Some(n));
             AsyncLockKp::new(prev, TokioMutexAccess::new(), next)
