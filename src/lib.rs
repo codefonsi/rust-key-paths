@@ -912,8 +912,8 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     {
         std::any::TypeId::of::<V>()
     }
-    fn getter(&self, root: Root) -> Option<Value>;
-    fn setter(&self, root: MutRoot) -> Option<MutValue>;
+    fn get(&self, root: Root) -> Option<Value>;
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
     fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
@@ -1226,42 +1226,39 @@ where
     }
 }
 
-pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
-    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 {
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
-    #[inline]
-    fn get_optional(&self, root: Option<Root>) -> Option<Value> {
-        root.and_then(|r| self.getter(r))
-    }
+    fn get_optional(&self, root: Option<Root>) -> Option<Value>;
+    //  {
+    //     root.and_then(|r| self.get(r))
+    // }
 
     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
-    #[inline]
-    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
-        root.and_then(|r| self.setter(r))
-    }
+    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>;
+    // {
+    //     root.and_then(|r| self.get_mut(r))
+    // }
 
     /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
-    #[inline]
     fn get_or_else<F>(&self, root: Root, f: F) -> Value
     where
-        F: FnOnce() -> Value,
-    {
-        self.getter(root).unwrap_or_else(f)
-    }
+        F: FnOnce() -> Value;
+    // {
+    //     self.get(root).unwrap_or_else(f)
+    // }
 
     /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
     #[inline]
     fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
     where
-        F: FnOnce() -> MutValue,
-    {
-        self.setter(root).unwrap_or_else(f)
-    }
+        F: FnOnce() -> MutValue,;
+    // {
+    //     self.get_mut(root).unwrap_or_else(f)
+    // }
 }
 
-pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
-    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
     Value: std::borrow::Borrow<V>,
@@ -1286,20 +1283,7 @@ where
         R: 'b,
         V: 'b,
         Root: for<'a> From<&'a R>,
-        MutRoot: for<'a> From<&'a mut R>,
-    {
-        Kp::new(
-            move |arc_root: std::sync::Arc<R>| {
-                let r_ref: &R = &*arc_root;
-                self.getter(Root::from(r_ref))
-            },
-            move |mut arc_root: std::sync::Arc<R>| {
-                // Get mutable reference only if we have exclusive ownership
-                std::sync::Arc::get_mut(&mut arc_root)
-                    .and_then(|r_mut| self.setter(MutRoot::from(r_mut)))
-            },
-        )
-    }
+        MutRoot: for<'a> From<&'a mut R>,;
 
     fn for_box<'a>(
         &self,
@@ -1317,19 +1301,14 @@ where
         R: 'a,
         V: 'a,
         Root: for<'b> From<&'b R>,
-        MutRoot: for<'b> From<&'b mut R>,
-    {
-        Kp::new(
-            move |r: Box<R>| {
-                let r_ref: &R = r.as_ref();
-                self.getter(Root::from(r_ref))
-            },
-            move |mut r: Box<R>| {
-                // Get mutable reference only if we have exclusive ownership
-                self.setter(MutRoot::from(r.as_mut()))
-            },
-        )
-    }
+        MutRoot: for<'b> From<&'b mut R>,;
+
+    /// set fn is converting fn pointer to Fn closure
+    fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue>;
+
+    /// get fn is converting fn pointer to Fn closure
+    fn into_get(self) -> impl Fn(Root) -> Option<Value>;
+
 }
 
 pub trait HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
@@ -1411,13 +1390,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.getter(root).map(|value| {
+                self.get(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.setter(root).map(|value| {
+                self.get_mut(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1445,13 +1424,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.getter(root).filter(|value| {
+                self.get(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
             },
             move |root: MutRoot| {
-                self.setter(root).filter(|value| {
+                self.get_mut(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
@@ -1480,13 +1459,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.getter(root).and_then(|value| {
+                self.get(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.setter(root).and_then(|value| {
+                self.get_mut(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1514,14 +1493,14 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.getter(root).map(|value| {
+                self.get(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
                 })
             },
             move |root: MutRoot| {
-                self.setter(root).map(|value| {
+                self.get_mut(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
@@ -1539,7 +1518,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.getter(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     mapper(v).into_iter().collect()
@@ -1556,7 +1535,7 @@ where
         Acc: Copy + 'static,
     {
         move |root: Root| {
-            self.getter(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     folder(init, v)
@@ -1572,7 +1551,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.getter(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1588,7 +1567,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.getter(root)
+            self.get(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1604,7 +1583,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.getter(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 counter(v)
             })
@@ -1619,7 +1598,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.getter(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 finder(v)
             })
@@ -1634,7 +1613,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.getter(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 taker(v, n)
             })
@@ -1649,7 +1628,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.getter(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 skipper(v, n)
             })
@@ -1664,7 +1643,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.getter(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 partitioner(v)
             })
@@ -1679,7 +1658,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.getter(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 min_fn(v)
             })
@@ -1694,7 +1673,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.getter(root).and_then(|value| {
+            self.get(root).and_then(|value| {
                 let v: &V = value.borrow();
                 max_fn(v)
             })
@@ -1709,7 +1688,7 @@ where
         Sum: 'static,
     {
         move |root: Root| {
-            self.getter(root).map(|value| {
+            self.get(root).map(|value| {
                 let v: &V = value.borrow();
                 sum_fn(v)
             })
@@ -1778,15 +1757,6 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
-    #[inline]
-    fn getter(&self, root: Root) -> Option<Value> {
-        (self.get)(root)
-    }
-
-    #[inline]
-    fn setter(&self, root: MutRoot) -> Option<MutValue> {
-        (self.set)(root)
-    }
 
     fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,
@@ -1813,6 +1783,15 @@ where
             move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
         )
     }
+    
+    fn get(&self, root: Root) -> Option<Value> {
+        (self.get)(root)
+    }
+    
+    fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+        (self.set)(root)
+    }
+
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -1826,6 +1805,79 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
+        fn for_arc<'b>(
+        &self,
+    ) -> Kp<
+        std::sync::Arc<R>,
+        V,
+        std::sync::Arc<R>,
+        Value,
+        std::sync::Arc<R>,
+        MutValue,
+        impl Fn(std::sync::Arc<R>) -> Option<Value>,
+        impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
+    >
+    where
+        R: 'b,
+        V: 'b,
+        Root: for<'a> From<&'a R>,
+        MutRoot: for<'a> From<&'a mut R>,
+    {
+        Kp::new(
+            move |arc_root: std::sync::Arc<R>| {
+                let r_ref: &R = &*arc_root;
+                (self.get)(Root::from(r_ref))
+            },
+            move |mut arc_root: std::sync::Arc<R>| {
+                // Get mutable reference only if we have exclusive ownership
+                std::sync::Arc::get_mut(&mut arc_root)
+                    .and_then(|r_mut| (self.set)(MutRoot::from(r_mut)))
+            },
+        )
+    }
+
+    fn for_box<'a>(
+        &self,
+    ) -> Kp<
+        Box<R>,
+        V,
+        Box<R>,
+        Value,
+        Box<R>,
+        MutValue,
+        impl Fn(Box<R>) -> Option<Value>,
+        impl Fn(Box<R>) -> Option<MutValue>,
+    >
+    where
+        R: 'a,
+        V: 'a,
+        Root: for<'b> From<&'b R>,
+        MutRoot: for<'b> From<&'b mut R>,
+    {
+        Kp::new(
+            move |r: Box<R>| {
+                let r_ref: &R = r.as_ref();
+                (self.get)(Root::from(r_ref))
+            },
+            move |mut r: Box<R>| {
+                // Get mutable reference only if we have exclusive ownership
+                (self.set)(MutRoot::from(r.as_mut()))
+            },
+        )
+    }
+
+
+    /// set fn is converting fn pointer to Fn closure
+    #[inline]
+    fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue> {
+        self.set
+    }
+    
+    /// get fn is converting fn pointer to Fn closure
+    #[inline]
+    fn into_get(self) -> impl Fn(Root) -> Option<Value> {
+        self.get
+    }
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -1852,6 +1904,37 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
+    /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
+    #[inline]
+    fn get_optional(&self, root: Option<Root>) -> Option<Value>
+     {
+        root.and_then(|r| (self.get)(r))
+    }
+
+    /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
+    #[inline]
+    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>
+    {
+        root.and_then(|r| (self.set)(r))
+    }
+
+    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_or_else<F>(&self, root: Root, f: F) -> Value
+    where
+        F: FnOnce() -> Value
+    {
+        (self.get)(root).unwrap_or_else(f)
+    }
+
+    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
+    #[inline]
+    fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
+    where
+        F: FnOnce() -> MutValue,
+    {
+        (self.set)(root).unwrap_or_else(f)
+    }
 }
 
 /// AKp (AnyKeyPath) - Hides both Root and Value types
@@ -1903,6 +1986,7 @@ where
 {
 }
 
+
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -1919,17 +2003,6 @@ where
             _p: std::marker::PhantomData,
         }
     }
-
-    #[inline]
-    pub fn set(&self) -> impl Fn(MutRoot) -> Option<MutValue> {
-        |root| { (self.set)(root) }
-    }
-
-    #[inline]
-    pub fn get(&self) -> impl Fn(Root) -> Option<Value> {
-        |root| { (self.get)(root) }
-    }
-
 
     // #[inline]
     // pub fn get(&self, root: Root) -> Option<Value> {
@@ -3257,8 +3330,8 @@ mod tests {
         let some_kp = enum_some::<Vec<i32>>();
         let count_kp = some_kp.map(|vec: &Vec<i32>| vec.len());
 
-        assert_eq!((count_kp.get)(&some_opt), Some(5));
-        assert_eq!((count_kp.get)(&none_opt), None);
+        assert_eq!(count_kp.get(&some_opt), Some(5));
+        assert_eq!(count_kp.get(&none_opt), None);
     }
 
     #[test]
@@ -3270,9 +3343,9 @@ mod tests {
         let ok_kp = enum_ok::<i32, String>();
         let positive_kp = ok_kp.filter(|x: &i32| *x > 0);
 
-        assert_eq!((positive_kp.get)(&ok_result1), Some(&42));
-        assert_eq!((positive_kp.get)(&ok_result2), None); // Negative number filtered out
-        assert_eq!((positive_kp.get)(&err_result), None); // Err variant
+        assert_eq!((positive_kp.extractor.get)(&ok_result1), Some(&42));
+        assert_eq!(positive_kp.get(&ok_result2), None); // Negative number filtered out
+        assert_eq!(positive_kp.get(&err_result), None); // Err variant
 
         // Filter Option strings by length
         let long_str = Some("hello world".to_string());

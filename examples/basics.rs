@@ -2,8 +2,10 @@
 //!
 //! Run with: `cargo run --example basics`
 
+use std::process::Output;
+
 use key_paths_derive::Kp;
-use rust_key_paths::{KpDynamic, KpTrait};
+use rust_key_paths::{CoercionTrait, KpDynamic, KpTrait};
 
 pub struct Service {
     rect_to_width_kp: KpDynamic<Rectangle, u32>,
@@ -95,10 +97,9 @@ fn main() {
         }
     }
 
-    let kp = Rectangle::size().then(Size::height()).get;
-    let kp = |root: &mut Rectangle| {(Rectangle::size().set)(root)};
-
-    let x:fn() = || {};
+    // let kp = Rectangle::size().then(Size::width()).get;
+    // let kp = |root: &mut Rectangle| {(Rectangle::size().set)(root)};
+    // let x:fn() = || {};
 
     // let x: fn(&Rectangle) -> Option<&Size> = Rectangle::size().get;
     // let y = that_takes(x);
