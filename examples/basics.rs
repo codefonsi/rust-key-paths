@@ -34,11 +34,11 @@ struct Rectangle {
 impl Rectangle {
     // fn kp() -> KpType<'static, Rectangle, String> {
     //     KpType::new(
-    //         |root| { 
+    //         |root| {
     //             let x = root.name.borrow();
     //             let y = &*x as *const String;
     //             Some(unsafe { &*y })}
-    //         ,|root| { 
+    //         ,|root| {
     //             let mut x = root.name.borrow_mut();
     //             let y = &mut *x as *mut String;
     //             Some(unsafe {&mut *y})
@@ -46,14 +46,12 @@ impl Rectangle {
     //     )
     // }
 
-
     // fn kp() -> KpType<'static, Rectangle, std::cell::Ref<'static, String>> {
     //     KpType::new(
     //         |root| { Some(&'static root.name.borrow()) }
     //         ,|_| { None }
     //     )
     // }
-
 }
 // Standalone fn pointers for keypath (reference: lib.rs identity_typed / Kp with fn types)
 
@@ -111,13 +109,11 @@ fn main() {
     println!("Updated rectangle: {:?}", rect);
 }
 
-
 fn that_takes(f: fn(&Rectangle) -> Option<&Size>) -> for<'a> fn(&'a Rectangle) -> String {
-    |_root| { "working".to_string() }
+    |_root| "working".to_string()
 }
 
-
-// fn 
+// fn
 // impl Fn
 // Fn, FnMut, FnOnce
 // Box<dyn Fn>

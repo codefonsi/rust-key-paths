@@ -10,7 +10,7 @@
 // type Getter<R, V, Root, Value> where Root: std::borrow::Borrow<R>, Value: std::borrow::Borrow<V> = fn(Root) -> Option<Value>;
 // type Setter<R, V> = fn(&'r mut R) -> Option<&'r mut V>;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
 // Export the lock module
 pub mod lock;
@@ -1226,8 +1226,7 @@ where
     }
 }
 
-pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-{
+pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
     fn get_optional(&self, root: Option<Root>) -> Option<Value>;
     //  {
@@ -1252,7 +1251,7 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
     #[inline]
     fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
     where
-        F: FnOnce() -> MutValue,;
+        F: FnOnce() -> MutValue;
     // {
     //     self.get_mut(root).unwrap_or_else(f)
     // }
@@ -1283,7 +1282,7 @@ where
         R: 'b,
         V: 'b,
         Root: for<'a> From<&'a R>,
-        MutRoot: for<'a> From<&'a mut R>,;
+        MutRoot: for<'a> From<&'a mut R>;
 
     fn for_box<'a>(
         &self,
@@ -1301,14 +1300,13 @@ where
         R: 'a,
         V: 'a,
         Root: for<'b> From<&'b R>,
-        MutRoot: for<'b> From<&'b mut R>,;
+        MutRoot: for<'b> From<&'b mut R>;
 
     /// set fn is converting fn pointer to Fn closure
     fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue>;
 
     /// get fn is converting fn pointer to Fn closure
     fn into_get(self) -> impl Fn(Root) -> Option<Value>;
-
 }
 
 pub trait HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
@@ -1757,7 +1755,6 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
-
     fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
@@ -1783,15 +1780,14 @@ where
             move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
         )
     }
-    
+
     fn get(&self, root: Root) -> Option<Value> {
         (self.get)(root)
     }
-    
+
     fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
         (self.set)(root)
     }
-
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -1805,7 +1801,7 @@ where
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
 {
-        fn for_arc<'b>(
+    fn for_arc<'b>(
         &self,
     ) -> Kp<
         std::sync::Arc<R>,
@@ -1866,13 +1862,12 @@ where
         )
     }
 
-
     /// set fn is converting fn pointer to Fn closure
     #[inline]
     fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue> {
         self.set
     }
-    
+
     /// get fn is converting fn pointer to Fn closure
     #[inline]
     fn into_get(self) -> impl Fn(Root) -> Option<Value> {
@@ -1906,15 +1901,13 @@ where
 {
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
     #[inline]
-    fn get_optional(&self, root: Option<Root>) -> Option<Value>
-     {
+    fn get_optional(&self, root: Option<Root>) -> Option<Value> {
         root.and_then(|r| (self.get)(r))
     }
 
     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
     #[inline]
-    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>
-    {
+    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
         root.and_then(|r| (self.set)(r))
     }
 
@@ -1922,7 +1915,7 @@ where
     #[inline]
     fn get_or_else<F>(&self, root: Root, f: F) -> Value
     where
-        F: FnOnce() -> Value
+        F: FnOnce() -> Value,
     {
         (self.get)(root).unwrap_or_else(f)
     }
@@ -1986,7 +1979,6 @@ where
 {
 }
 
-
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
 where
     Root: std::borrow::Borrow<R>,
@@ -2040,7 +2032,6 @@ where
             move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
         )
     }
-
 }
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)

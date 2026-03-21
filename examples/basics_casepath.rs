@@ -8,8 +8,8 @@ use std::sync::Arc;
 // cargo run --example basics_casepath --features parking_lot
 #[derive(Debug, Kp)]
 struct SomeComplexStruct {
+    id: String,
     scsf: Option<Box<SomeOtherStruct>>,
-    identity: String,
     scfs2: Arc<std::sync::Mutex<SomeOtherStruct>>,
     scfs3: Arc<std::sync::RwLock<SomeOtherStruct>>,
     // scfs4: Arc<RefMut<SomeOtherStruct>>,
@@ -89,9 +89,8 @@ impl SomeComplexStruct {
         };
 
         Self {
+            id: String::from("SomeComplexStruct"),
             scsf: Some(Box::new(inner.clone())),
-            identity: String::from("SomeComplexStruct"),
-
             // Arc<std::sync::Mutex/RwLock<T>>
             scfs2: Arc::new(std::sync::Mutex::new(inner.clone())),
             scfs3: Arc::new(std::sync::RwLock::new(inner.clone())),
