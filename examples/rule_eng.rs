@@ -1,60 +1,63 @@
 use key_paths_derive::Kp;
 use rust_key_paths::{AccessorTrait, KpTrait, KpType};
 
-struct RuleBuilder<'a, R, V> {
-    root: Option<R>, 
-    value: Option<V>, 
+pub struct RuleBuilder<'a, R, V> {
+    root: Option<R>,
     kp: KpType<'a, R, V>,
-    rules: Vec<fn(Option<&'a V>) -> Option<&'a str>>,
-    errors: Vec<&'a str>
+    rules: Vec<fn(Option<&V>) -> Option<&'static str>>,
 }
 
 impl<'a, R, V> RuleBuilder<'a, R, V> {
     pub fn new(kp: KpType<'a, R, V>) -> Self {
-        todo!()
+        Self {
+            root: None,
+            kp,
+            rules: vec![],
+        }
     }
-}
 
-pub trait ISOabc123 {
-    fn a<'a>() -> &'a str;
-}
+    pub fn with_root(mut self, root: R) -> Self {
+        self.root = Some(root);
+        self
+    }
 
-impl<'a, R, V> RuleBuilder<'a, R, V>  {
-    fn rule(mut self, f: fn(Option<&V>) -> Option<&'a str>) -> Self {
+    pub fn rule(mut self, f: fn(Option<&V>) -> Option<&'static str>) -> Self {
         self.rules.push(f);
         self
     }
 
-    fn apply(&'a self) {
-        for i in &self.rules {
-        let x = (i)(self.kp.get_optional(self.root.as_ref()));
-        }
+    pub fn apply(&self) -> Vec<&'static str> {
+        let val = self.kp.get_optional(self.root.as_ref());
+        self.rules
+            .iter()
+            .filter_map(|f| f(val))
+            .collect()
     }
 }
 
-
-
-fn rule<'a, R, V>(kp: KpType<'a, R, V>) -> RuleBuilder<'a, R, V> {
-    RuleBuilder::new(kp)
-}
-
-
-fn iso123rule<'a>(r:Option<&str>) -> Option<&'a str> {
-    if r.is_none() && r.unwrap().trim().len() > 0 {
-        None
+fn iso123rule(r: Option<&str>) -> Option<&'static str> {
+    if r.map_or(true, |s| s.trim().is_empty()) {
+        Some("iso123rule: field is required and must not be blank")
     } else {
-        Some("iso123rule vailated")
+        None
     }
 }
 
 #[derive(Kp)]
 struct Test {
-    a: String
+    a: String,
 }
+
 fn main() {
-    let mut builder = RuleBuilder::new(Test::a());
-    let rule = builder
-    .rule(iso123rule)
-    .rule(iso123rule)
-    .apply();
+    let t = Test { a: "  ".to_string() };
+
+    let errors = RuleBuilder::new(Test::a())
+        .with_root(t)
+        .rule(iso123rule)
+        .rule(iso123rule)
+        .apply();
+
+    for e in &errors {
+        println!("{}", e);
+    }
 }
