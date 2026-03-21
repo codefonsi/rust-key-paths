@@ -29,7 +29,7 @@
 //!    - Only clones `PhantomData<T>` which is zero-sized
 //!    - Compiled away completely - zero runtime cost
 
-use crate::{Kp};
+use crate::{AccessorTrait, Kp, KpTrait};
 use async_trait::async_trait;
 // Re-export tokio sync types for convenience
 #[cfg(feature = "tokio")]
@@ -138,12 +138,13 @@ where
     MutValue: std::borrow::BorrowMut<V>,
     G: Fn(Root) -> Option<Value>,
     S: Fn(MutRoot) -> Option<MutValue>,
+    // Kp<R, V, Root, Value, MutRoot, MutValue, G, S>: AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 {
     fn sync_get(&self, root: Root) -> Option<Value> {
-        self.get(root)
+        (self.get)(root)
     }
     fn sync_get_mut(&self, root: MutRoot) -> Option<MutValue> {
-        self.get_mut(root)
+        (self.set)(root)
     }
 }
 

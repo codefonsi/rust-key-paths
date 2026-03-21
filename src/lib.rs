@@ -912,8 +912,8 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     {
         std::any::TypeId::of::<V>()
     }
-    fn get(&self, root: Root) -> Option<Value>;
-    fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
+    fn getter(&self, root: Root) -> Option<Value>;
+    fn setter(&self, root: MutRoot) -> Option<MutValue>;
     fn then<SV, SubValue, MutSubValue, G2, S2>(
         self,
         next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
@@ -1232,13 +1232,13 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
     #[inline]
     fn get_optional(&self, root: Option<Root>) -> Option<Value> {
-        root.and_then(|r| self.get(r))
+        root.and_then(|r| self.getter(r))
     }
 
     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
     #[inline]
     fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
-        root.and_then(|r| self.get_mut(r))
+        root.and_then(|r| self.setter(r))
     }
 
     /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
@@ -1247,7 +1247,7 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
     where
         F: FnOnce() -> Value,
     {
-        self.get(root).unwrap_or_else(f)
+        self.getter(root).unwrap_or_else(f)
     }
 
     /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
@@ -1256,7 +1256,7 @@ pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
     where
         F: FnOnce() -> MutValue,
     {
-        self.get_mut(root).unwrap_or_else(f)
+        self.setter(root).unwrap_or_else(f)
     }
 }
 
@@ -1291,12 +1291,12 @@ where
         Kp::new(
             move |arc_root: std::sync::Arc<R>| {
                 let r_ref: &R = &*arc_root;
-                self.get(Root::from(r_ref))
+                self.getter(Root::from(r_ref))
             },
             move |mut arc_root: std::sync::Arc<R>| {
                 // Get mutable reference only if we have exclusive ownership
                 std::sync::Arc::get_mut(&mut arc_root)
-                    .and_then(|r_mut| self.get_mut(MutRoot::from(r_mut)))
+                    .and_then(|r_mut| self.setter(MutRoot::from(r_mut)))
             },
         )
     }
@@ -1322,11 +1322,11 @@ where
         Kp::new(
             move |r: Box<R>| {
                 let r_ref: &R = r.as_ref();
-                self.get(Root::from(r_ref))
+                self.getter(Root::from(r_ref))
             },
             move |mut r: Box<R>| {
                 // Get mutable reference only if we have exclusive ownership
-                self.get_mut(MutRoot::from(r.as_mut()))
+                self.setter(MutRoot::from(r.as_mut()))
             },
         )
     }
@@ -1411,13 +1411,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.get(root).map(|value| {
+                self.getter(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut(root).map(|value| {
+                self.setter(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1445,13 +1445,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.get(root).filter(|value| {
+                self.getter(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut(root).filter(|value| {
+                self.setter(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
@@ -1480,13 +1480,13 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.get(root).and_then(|value| {
+                self.getter(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
             move |root: MutRoot| {
-                self.get_mut(root).and_then(|value| {
+                self.setter(root).and_then(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
@@ -1514,14 +1514,14 @@ where
     {
         Kp::new(
             move |root: Root| {
-                self.get(root).map(|value| {
+                self.getter(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
                 })
             },
             move |root: MutRoot| {
-                self.get_mut(root).map(|value| {
+                self.setter(root).map(|value| {
                     let v: &V = value.borrow();
                     inspector(v);
                     value
@@ -1539,7 +1539,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.get(root)
+            self.getter(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     mapper(v).into_iter().collect()
@@ -1556,7 +1556,7 @@ where
         Acc: Copy + 'static,
     {
         move |root: Root| {
-            self.get(root)
+            self.getter(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     folder(init, v)
@@ -1572,7 +1572,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.get(root)
+            self.getter(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1588,7 +1588,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.get(root)
+            self.getter(root)
                 .map(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1604,7 +1604,7 @@ where
         V: 'static,
     {
         move |root: Root| {
-            self.get(root).map(|value| {
+            self.getter(root).map(|value| {
                 let v: &V = value.borrow();
                 counter(v)
             })
@@ -1619,7 +1619,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.get(root).and_then(|value| {
+            self.getter(root).and_then(|value| {
                 let v: &V = value.borrow();
                 finder(v)
             })
@@ -1634,7 +1634,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.get(root).map(|value| {
+            self.getter(root).map(|value| {
                 let v: &V = value.borrow();
                 taker(v, n)
             })
@@ -1649,7 +1649,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.get(root).map(|value| {
+            self.getter(root).map(|value| {
                 let v: &V = value.borrow();
                 skipper(v, n)
             })
@@ -1664,7 +1664,7 @@ where
         Output: 'static,
     {
         move |root: Root| {
-            self.get(root).map(|value| {
+            self.getter(root).map(|value| {
                 let v: &V = value.borrow();
                 partitioner(v)
             })
@@ -1679,7 +1679,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.get(root).and_then(|value| {
+            self.getter(root).and_then(|value| {
                 let v: &V = value.borrow();
                 min_fn(v)
             })
@@ -1694,7 +1694,7 @@ where
         Item: 'static,
     {
         move |root: Root| {
-            self.get(root).and_then(|value| {
+            self.getter(root).and_then(|value| {
                 let v: &V = value.borrow();
                 max_fn(v)
             })
@@ -1709,7 +1709,7 @@ where
         Sum: 'static,
     {
         move |root: Root| {
-            self.get(root).map(|value| {
+            self.getter(root).map(|value| {
                 let v: &V = value.borrow();
                 sum_fn(v)
             })
@@ -1779,12 +1779,12 @@ where
     S: Fn(MutRoot) -> Option<MutValue>,
 {
     #[inline]
-    fn get(&self, root: Root) -> Option<Value> {
+    fn getter(&self, root: Root) -> Option<Value> {
         (self.get)(root)
     }
 
     #[inline]
-    fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+    fn setter(&self, root: MutRoot) -> Option<MutValue> {
         (self.set)(root)
     }
 
@@ -1875,9 +1875,9 @@ where
     S: Fn(MutRoot) -> Option<MutValue>,
 {
     /// Getter closure: used by [Kp::get] for read-only access.
-    pub(crate) get: G,
+    pub get: G,
     /// Setter closure: used by [Kp::get_mut] for mutation.
-    pub(crate) set: S,
+    pub set: S,
     _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
 }
 
@@ -1921,14 +1921,25 @@ where
     }
 
     #[inline]
-    pub fn get(&self, root: Root) -> Option<Value> {
-        (self.get)(root)
+    pub fn set(&self) -> impl Fn(MutRoot) -> Option<MutValue> {
+        |root| { (self.set)(root) }
     }
 
     #[inline]
-    pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
-        (self.set)(root)
+    pub fn get(&self) -> impl Fn(Root) -> Option<Value> {
+        |root| { (self.get)(root) }
     }
+
+
+    // #[inline]
+    // pub fn get(&self, root: Root) -> Option<Value> {
+    //     (self.get)(root)
+    // }
+
+    // #[inline]
+    // pub fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+    //     (self.set)(root)
+    // }
 
     #[inline]
     pub fn then<SV, SubValue, MutSubValue, G2, S2>(
@@ -2084,12 +2095,12 @@ where
 
     /// Extract the variant from an enum (returns None if wrong variant)
     pub fn get(&self, enum_value: Root) -> Option<Value> {
-        self.extractor.get(enum_value)
+        (self.extractor.get)(enum_value)
     }
 
     /// Extract the variant mutably from an enum (returns None if wrong variant)
     pub fn get_mut(&self, enum_value: MutRoot) -> Option<MutValue> {
-        self.extractor.get_mut(enum_value)
+        (self.extractor.set)(enum_value)
     }
 
     /// Embed a value into the enum variant
@@ -2599,15 +2610,15 @@ mod tests {
             .get_mut(&mut instance)
             .unwrap();
         *wres = String::from("a3 changed successfully");
-        let res = TestKP::f().then(TestKP2::a()).get(&instance);
+        let res = (TestKP::f().then(TestKP2::a()).get)(&instance);
         println!("{:?}", res);
-        let res = TestKP::f().then(TestKP2::identity()).get(&instance);
+        let res = (TestKP::f().then(TestKP2::identity()).get)(&instance);
         println!("{:?}", res);
-        let res = kp.get(&instance);
+        let res = (kp.get)(&instance);
         println!("{:?}", res);
 
         let new_kp_from_hashmap = TestKP::g(0).then(TestKP2::a());
-        println!("{:?}", new_kp_from_hashmap.get(&instance));
+        println!("{:?}", (new_kp_from_hashmap.get)(&instance));
     }
 
     // #[test]
@@ -2811,7 +2822,7 @@ mod tests {
         let box_kp = kp_box();
 
         // Test get
-        assert_eq!(box_kp.get(&boxed), Some(&"value".to_string()));
+        assert_eq!((box_kp.get)(&boxed), Some(&"value".to_string()));
 
         // Test get_mut
         if let Some(val) = box_kp.get_mut(&mut boxed_mut) {
@@ -2828,7 +2839,7 @@ mod tests {
         let arc_kp = kp_arc();
 
         // Test get
-        assert_eq!(arc_kp.get(&arc), Some(&"value".to_string()));
+        assert_eq!((arc_kp.get)(&arc), Some(&"value".to_string()));
 
         // Test get_mut (only works if Arc has no other references)
         if let Some(val) = arc_kp.get_mut(&mut arc_mut) {
@@ -2866,7 +2877,7 @@ mod tests {
         let ok_kp_base = ok_kp.into_kp();
         let composed = ok_kp_base.then(inner_kp);
 
-        assert_eq!(composed.get(&result), Some(&"nested".to_string()));
+        assert_eq!((composed.get)(&result), Some(&"nested".to_string()));
     }
 
     #[test]
@@ -3157,17 +3168,17 @@ mod tests {
         let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
         let len_kp = name_kp.map(|name: &String| name.len());
 
-        assert_eq!(len_kp.get(&user), Some(5));
+        assert_eq!((len_kp.get)(&user), Some(5));
 
         // Map age to double
         let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
         let double_age_kp = age_kp.map(|age: &i32| age * 2);
 
-        assert_eq!(double_age_kp.get(&user), Some(60));
+        assert_eq!((double_age_kp.get)(&user), Some(60));
 
         // Map to boolean
         let is_adult_kp = age_kp.map(|age: &i32| *age >= 18);
-        assert_eq!(is_adult_kp.get(&user), Some(true));
+        assert_eq!((is_adult_kp.get)(&user), Some(true));
     }
 
     #[test]
@@ -3191,15 +3202,15 @@ mod tests {
         let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
         let adult_age_kp = age_kp.filter(|age: &i32| *age >= 18);
 
-        assert_eq!(adult_age_kp.get(&adult), Some(&30));
-        assert_eq!(adult_age_kp.get(&minor), None);
+        assert_eq!((adult_age_kp.get)(&adult), Some(&30));
+        assert_eq!((adult_age_kp.get)(&minor), None);
 
         // Filter names by length
         let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
         let short_name_kp = name_kp.filter(|name: &String| name.len() <= 4);
 
-        assert_eq!(short_name_kp.get(&minor), Some(&"Bob".to_string()));
-        assert_eq!(short_name_kp.get(&adult), None);
+        assert_eq!((short_name_kp.get)(&minor), Some(&"Bob".to_string()));
+        assert_eq!((short_name_kp.get)(&adult), None);
     }
 
     #[test]
@@ -3225,7 +3236,7 @@ mod tests {
         // Filter for high averages
         let high_avg_kp = avg_kp.filter(|avg: &i32| *avg >= 85);
 
-        assert_eq!(high_avg_kp.get(&user), Some(87)); // (85+92+78+95)/4 = 87.5 -> 87
+        assert_eq!((high_avg_kp.get)(&user), Some(87)); // (85+92+78+95)/4 = 87.5 -> 87
     }
 
     #[test]
@@ -3246,8 +3257,8 @@ mod tests {
         let some_kp = enum_some::<Vec<i32>>();
         let count_kp = some_kp.map(|vec: &Vec<i32>| vec.len());
 
-        assert_eq!(count_kp.get(&some_opt), Some(5));
-        assert_eq!(count_kp.get(&none_opt), None);
+        assert_eq!((count_kp.get)(&some_opt), Some(5));
+        assert_eq!((count_kp.get)(&none_opt), None);
     }
 
     #[test]
@@ -3259,9 +3270,9 @@ mod tests {
         let ok_kp = enum_ok::<i32, String>();
         let positive_kp = ok_kp.filter(|x: &i32| *x > 0);
 
-        assert_eq!(positive_kp.get(&ok_result1), Some(&42));
-        assert_eq!(positive_kp.get(&ok_result2), None); // Negative number filtered out
-        assert_eq!(positive_kp.get(&err_result), None); // Err variant
+        assert_eq!((positive_kp.get)(&ok_result1), Some(&42));
+        assert_eq!((positive_kp.get)(&ok_result2), None); // Negative number filtered out
+        assert_eq!((positive_kp.get)(&err_result), None); // Err variant
 
         // Filter Option strings by length
         let long_str = Some("hello world".to_string());
@@ -3375,8 +3386,8 @@ mod tests {
         let first_char_kp = middle_kp
             .filter_map(|opt: &Option<String>| opt.as_ref().and_then(|s| s.chars().next()));
 
-        assert_eq!(first_char_kp.get(&user_with), Some('M'));
-        assert_eq!(first_char_kp.get(&user_without), None);
+        assert_eq!((first_char_kp.get)(&user_with), Some('M'));
+        assert_eq!((first_char_kp.get)(&user_without), None);
     }
 
     #[test]
@@ -3397,7 +3408,7 @@ mod tests {
 
         // We can't easily test side effects with Copy constraint,
         // so we'll just test that inspect passes through the value
-        let result = name_kp.get(&user);
+        let result = (name_kp.get)(&user);
         assert_eq!(result, Some(&"Akash".to_string()));
 
         // The inspect method works, it just requires Copy closures
