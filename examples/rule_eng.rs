@@ -6,6 +6,7 @@ use rust_key_paths::{AccessorTrait, KpTrait, KpType};
 #[derive(Debug)]
 pub enum ErrorCode {
     ISOError,
+    ISOError2,
     Some1Error(Cow<'static, String>),
     Some2Error(Cow<'static, String>),
     Some3Error(Cow<'static, String>),
@@ -56,7 +57,7 @@ mod iso_pain {
     // For mandatory/optional — receives &String directly, None already handled
     pub fn not_blank<'a>(s: &'a String) -> &'a crate::ErrorCode {
         if s.trim().is_empty() {
-            &crate::ErrorCode::ISOError
+            &crate::ErrorCode::ISOError2
         } else {
             &crate::ErrorCode::Success
         }
@@ -84,13 +85,30 @@ fn main() {
         b: "asdf ".to_string(),
     };
 
-    let errors = RuleBuilder::new(Test::a())
+    let rules = [RuleBuilder::new(Test::a())
         .with_root(&t)
         .rule(iso_pain::iso123rule)
         .rule(iso_pain::iso123rule)
-        .apply();
+        .rule(iso_pain::iso123rule)
+        .rule(iso_pain::iso123rule),
 
-    for e in &errors {
-        println!("{:?}", e);
-    }
+
+        RuleBuilder::new(Test::b())
+        .with_root(&t)
+        .rule(iso_pain::iso123rule)
+        .rule(iso_pain::iso123rule)
+        .rule(iso_pain::iso123rule)
+        .rule(iso_pain::iso123rule)
+        ];
+
+
+        // let errors = rules
+        // .iter()
+        // .fold(Vec::new(), |mut acc, v|  {acc.append(&mut v.apply()); acc} );
+
+        let errors: Vec<&ErrorCode> = rules.iter().flat_map(|v| v.apply()).collect();
+        
+        for e in errors {
+            println!("{:?}", e);
+        }
 }
