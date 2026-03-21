@@ -1,6 +1,6 @@
 [package]
 name = "rust-key-paths"
-version = "2.9.0"
+version = "2.9.1"
 edition = "2024"
 authors = ["Codefonsi <info@codefonsi.com>"]
 license = "MPL-2.0"
@@ -38,56 +38,6 @@ tagged_core = ["tagged-core/default"]
 tokio = ["dep:tokio"]
 
 [dev-dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-parking_lot = "0.12"
 tagged-core = "1.0.1"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4", "serde"] }
-criterion = { version = "0.5", features = ["html_reports"] }
-tokio = { version = "1.38.0", features = ["sync", "rt", "rt-multi-thread", "macros"] }
-key-paths-derive = { path = "key-paths-derive" }
-key-paths-iter = { path = "key-paths-iter", features = ["rayon", "gpu"] }
-num_cpus = "1.16"
-rayon = "1.10"
 pin-project = "1.1"
-
-[[bench]]
-name = "deep_chain_leaf"
-harness = false
-
-[[bench]]
-name = "kp_plain_only"
-harness = false
-
-[[bench]]
-name = "deep_chain_sync_only"
-harness = false
-
-[[bench]]
-name = "deep_chain_async_only"
-harness = false
-
-[[bench]]
-name = "keypath_vs_unwrap"
-harness = false
-
-[[bench]]
-name = "ten_level_arc_rwlock"
-harness = false
-
-[[bench]]
-name = "ten_level_std_rwlock"
-harness = false
-
-[[bench]]
-name = "ten_level_tokio_rwlock"
-harness = false
-
-[[bench]]
-name = "scale_par_bench"
-harness = false
-
-[[bench]]
-name = "akp_cpu_bench"
-harness = false
+key-paths-derive = { path = "key-paths-derive" }

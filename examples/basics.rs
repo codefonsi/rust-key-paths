@@ -2,8 +2,10 @@
 //!
 //! Run with: `cargo run --example basics`
 
+use std::process::Output;
+
 use key_paths_derive::Kp;
-use rust_key_paths::{Kp, KpDynamic, KpType};
+use rust_key_paths::{CoercionTrait, KpDynamic, KpTrait};
 
 pub struct Service {
     rect_to_width_kp: KpDynamic<Rectangle, u32>,
@@ -29,6 +31,30 @@ struct Rectangle {
     name: String,
 }
 
+impl Rectangle {
+    // fn kp() -> KpType<'static, Rectangle, String> {
+    //     KpType::new(
+    //         |root| { 
+    //             let x = root.name.borrow();
+    //             let y = &*x as *const String;
+    //             Some(unsafe { &*y })}
+    //         ,|root| { 
+    //             let mut x = root.name.borrow_mut();
+    //             let y = &mut *x as *mut String;
+    //             Some(unsafe {&mut *y})
+    //         }
+    //     )
+    // }
+
+
+    // fn kp() -> KpType<'static, Rectangle, std::cell::Ref<'static, String>> {
+    //     KpType::new(
+    //         |root| { Some(&'static root.name.borrow()) }
+    //         ,|_| { None }
+    //     )
+    // }
+
+}
 // Standalone fn pointers for keypath (reference: lib.rs identity_typed / Kp with fn types)
 
 impl Rectangle {
@@ -57,7 +83,7 @@ fn main() {
     // Read: compose keypaths with then()
     {
         let width_path = Rectangle::size().then(Size::width());
-        if let Some(w) = width_path.get(&rect) {
+        if let Some(w) = (width_path.get)(&rect) {
             println!("Width: {}", w);
         }
         println!("Width (direct): {:?}", width_path.get(&rect));
@@ -70,5 +96,28 @@ fn main() {
             *w += 50;
         }
     }
+
+    // let kp = Rectangle::size().then(Size::width()).get;
+    // let kp = |root: &mut Rectangle| {(Rectangle::size().set)(root)};
+    // let x:fn() = || {};
+
+    // let x: fn(&Rectangle) -> Option<&Size> = Rectangle::size().get;
+    // let y = that_takes(x);
+
+    // let x: fn() = || {};
+
+    // let x = Rectangle::kp().get(todo!());
+    // let x = Rectangle::kp().get_mut(todo!());
     println!("Updated rectangle: {:?}", rect);
 }
+
+
+fn that_takes(f: fn(&Rectangle) -> Option<&Size>) -> for<'a> fn(&'a Rectangle) -> String {
+    |_root| { "working".to_string() }
+}
+
+
+// fn 
+// impl Fn
+// Fn, FnMut, FnOnce
+// Box<dyn Fn>
