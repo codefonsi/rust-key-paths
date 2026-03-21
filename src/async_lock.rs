@@ -1866,7 +1866,10 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::Mut
     }
 
     #[inline]
-    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::Mutex<T>>) -> Option<&'a mut T> {
+    async fn lock_write(
+        &self,
+        lock: &mut std::sync::Arc<tokio::sync::Mutex<T>>,
+    ) -> Option<&'a mut T> {
         let mut guard = lock.lock().await;
         let ptr = &mut *guard as *mut T;
         unsafe { Some(&mut *ptr) }
@@ -1948,7 +1951,10 @@ impl<'a, T: 'static + Send + Sync> AsyncLockLike<std::sync::Arc<tokio::sync::RwL
         unsafe { Some(&mut *ptr) }
     }
 
-    async fn lock_write(&self, lock: &mut std::sync::Arc<tokio::sync::RwLock<T>>) -> Option<&'a mut T> {
+    async fn lock_write(
+        &self,
+        lock: &mut std::sync::Arc<tokio::sync::RwLock<T>>,
+    ) -> Option<&'a mut T> {
         // SHALLOW CLONE: Only Arc refcount is incremented
         let mut guard = lock.write().await;
         let ptr = &mut *guard as *mut T;
