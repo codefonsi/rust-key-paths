@@ -324,10 +324,6 @@ where
 }
 
 impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>
-where
-    'a: 'static,
-    R: 'static,
-    V: 'static,
 {
     #[inline]
     fn from(kp: KpType<'a, R, V>) -> Self {
@@ -936,8 +932,7 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
         SubValue: std::borrow::Borrow<SV>,
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static;
+        S2: Fn(MutValue) -> Option<MutSubValue>,;
 }
 
 pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
@@ -1034,7 +1029,6 @@ pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
         pin_fut: L,
     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
-        V: 'static,
         Struct: Unpin + 'static,
         Output: 'static,
         Value: std::borrow::Borrow<Struct>,
@@ -1060,7 +1054,6 @@ pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
         AsyncKp,
     >
     where
-        V: 'static,
         Value: std::borrow::Borrow<V>,
         MutValue: std::borrow::BorrowMut<V>,
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
@@ -1178,7 +1171,6 @@ where
         pin_fut: L,
     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
-        V: 'static,
         Struct: Unpin + 'static,
         Output: 'static,
         Value: std::borrow::Borrow<Struct>,
@@ -1209,7 +1201,6 @@ where
         AsyncKp,
     >
     where
-        V: 'static,
         Value: std::borrow::Borrow<V>,
         MutValue: std::borrow::BorrowMut<V>,
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
@@ -1383,7 +1374,6 @@ where
     >
     where
         F: Fn(&V) -> MappedValue + Copy + 'static,
-        V: 'static,
         MappedValue: 'static,
     {
         Kp::new(
@@ -1418,16 +1408,15 @@ where
     >
     where
         F: Fn(&V) -> bool + Copy + 'static,
-        V: 'static,
     {
         Kp::new(
-            move |root: Root| {
+             move |root: Root| {
                 self.get(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
             },
-            move |root: MutRoot| {
+             move |root: MutRoot| {
                 self.get_mut(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1452,8 +1441,6 @@ where
     >
     where
         F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
     {
         Kp::new(
             move |root: Root| {
@@ -1487,7 +1474,6 @@ where
     >
     where
         F: Fn(&V) + Copy + 'static,
-        V: 'static,
     {
         Kp::new(
             move |root: Root| {
@@ -1511,9 +1497,7 @@ where
     fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
     where
         F: Fn(&V) -> I + 'static,
-        V: 'static,
         I: IntoIterator<Item = Item>,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1529,7 +1513,6 @@ where
     fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
     where
         F: Fn(Acc, &V) -> Acc + 'static,
-        V: 'static,
         Acc: Copy + 'static,
     {
         move |root: Root| {
@@ -1546,7 +1529,6 @@ where
     fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
     where
         F: Fn(&V) -> bool + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1562,7 +1544,6 @@ where
     fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
     where
         F: Fn(&V) -> bool + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1578,7 +1559,6 @@ where
     fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
     where
         F: Fn(&V) -> usize + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1592,8 +1572,6 @@ where
     fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1607,8 +1585,6 @@ where
     fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1622,8 +1598,6 @@ where
     fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1637,8 +1611,6 @@ where
     fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1652,8 +1624,6 @@ where
     fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1667,8 +1637,6 @@ where
     fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1682,8 +1650,6 @@ where
     fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
     where
         F: Fn(&V) -> Sum + 'static,
-        V: 'static,
-        Sum: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1773,7 +1739,6 @@ where
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
     {
         Kp::new(
             move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
@@ -2025,8 +1990,8 @@ where
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
     {
+
         Kp::new(
             move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
             move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),

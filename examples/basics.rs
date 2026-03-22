@@ -99,6 +99,12 @@ fn main() {
     // let kp = |root: &mut Rectangle| {(Rectangle::size().set)(root)};
     // let x:fn() = || {};
 
+    let kp = Rectangle::size().get;
+    let kp = Rectangle::size().set;
+
+    let kp = Rectangle::size().then(Size::width());
+    let kp: for<'a> fn(&'a Rectangle) -> Option<&'a u32> = kp.get;
+
     // let x: fn(&Rectangle) -> Option<&Size> = Rectangle::size().get;
     // let y = that_takes(x);
 
