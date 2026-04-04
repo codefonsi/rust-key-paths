@@ -10,6 +10,7 @@
 // type Getter<R, V, Root, Value> where Root: std::borrow::Borrow<R>, Value: std::borrow::Borrow<V> = fn(Root) -> Option<Value>;
 // type Setter<R, V> = fn(&'r mut R) -> Option<&'r mut V>;
 
+use std::fmt;
 use std::sync::Arc;
 
 // Export the lock module
@@ -324,10 +325,6 @@ where
 }
 
 impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>
-where
-    'a: 'static,
-    R: 'static,
-    V: 'static,
 {
     #[inline]
     fn from(kp: KpType<'a, R, V>) -> Self {
@@ -690,6 +687,26 @@ impl AKp {
         }
     }
 }
+
+impl fmt::Debug for AKp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AKp")
+            .field("root_type_id", &self.root_type_id)
+            .field("value_type_id", &self.value_type_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Display for AKp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "AKp(root_type_id={:?}, value_type_id={:?})",
+            self.root_type_id, self.value_type_id
+        )
+    }
+}
+
 pub struct PKp<Root> {
     getter: Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn Any>>,
     value_type_id: TypeId,
@@ -897,6 +914,26 @@ where
     }
 }
 
+impl<Root> fmt::Debug for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PKp")
+            .field("root_ty", &std::any::type_name::<Root>())
+            .field("value_type_id", &self.value_type_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Root> fmt::Display for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PKp<{}, value_type_id={:?}>",
+            std::any::type_name::<Root>(),
+            self.value_type_id
+        )
+    }
+}
+
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 
 pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
@@ -936,8 +973,7 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
         SubValue: std::borrow::Borrow<SV>,
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static;
+        S2: Fn(MutValue) -> Option<MutSubValue>,;
 }
 
 pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
@@ -1034,7 +1070,6 @@ pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
         pin_fut: L,
     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
-        V: 'static,
         Struct: Unpin + 'static,
         Output: 'static,
         Value: std::borrow::Borrow<Struct>,
@@ -1060,7 +1095,6 @@ pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
         AsyncKp,
     >
     where
-        V: 'static,
         Value: std::borrow::Borrow<V>,
         MutValue: std::borrow::BorrowMut<V>,
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
@@ -1178,7 +1212,6 @@ where
         pin_fut: L,
     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
     where
-        V: 'static,
         Struct: Unpin + 'static,
         Output: 'static,
         Value: std::borrow::Borrow<Struct>,
@@ -1209,7 +1242,6 @@ where
         AsyncKp,
     >
     where
-        V: 'static,
         Value: std::borrow::Borrow<V>,
         MutValue: std::borrow::BorrowMut<V>,
         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
@@ -1383,7 +1415,6 @@ where
     >
     where
         F: Fn(&V) -> MappedValue + Copy + 'static,
-        V: 'static,
         MappedValue: 'static,
     {
         Kp::new(
@@ -1418,16 +1449,15 @@ where
     >
     where
         F: Fn(&V) -> bool + Copy + 'static,
-        V: 'static,
     {
         Kp::new(
-            move |root: Root| {
+             move |root: Root| {
                 self.get(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
                 })
             },
-            move |root: MutRoot| {
+             move |root: MutRoot| {
                 self.get_mut(root).filter(|value| {
                     let v: &V = value.borrow();
                     predicate(v)
@@ -1452,8 +1482,6 @@ where
     >
     where
         F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-        V: 'static,
-        MappedValue: 'static,
     {
         Kp::new(
             move |root: Root| {
@@ -1487,7 +1515,6 @@ where
     >
     where
         F: Fn(&V) + Copy + 'static,
-        V: 'static,
     {
         Kp::new(
             move |root: Root| {
@@ -1511,9 +1538,7 @@ where
     fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
     where
         F: Fn(&V) -> I + 'static,
-        V: 'static,
         I: IntoIterator<Item = Item>,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1529,7 +1554,6 @@ where
     fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
     where
         F: Fn(Acc, &V) -> Acc + 'static,
-        V: 'static,
         Acc: Copy + 'static,
     {
         move |root: Root| {
@@ -1546,7 +1570,6 @@ where
     fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
     where
         F: Fn(&V) -> bool + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1562,7 +1585,6 @@ where
     fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
     where
         F: Fn(&V) -> bool + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root)
@@ -1578,7 +1600,6 @@ where
     fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
     where
         F: Fn(&V) -> usize + 'static,
-        V: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1592,8 +1613,6 @@ where
     fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1607,8 +1626,6 @@ where
     fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1622,8 +1639,6 @@ where
     fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V, usize) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1637,8 +1652,6 @@ where
     fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
     where
         F: Fn(&V) -> Output + 'static,
-        V: 'static,
-        Output: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1652,8 +1665,6 @@ where
     fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1667,8 +1678,6 @@ where
     fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
     where
         F: Fn(&V) -> Option<Item> + 'static,
-        V: 'static,
-        Item: 'static,
     {
         move |root: Root| {
             self.get(root).and_then(|value| {
@@ -1682,8 +1691,6 @@ where
     fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
     where
         F: Fn(&V) -> Sum + 'static,
-        V: 'static,
-        Sum: 'static,
     {
         move |root: Root| {
             self.get(root).map(|value| {
@@ -1773,7 +1780,6 @@ where
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
     {
         Kp::new(
             move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
@@ -2025,14 +2031,53 @@ where
         MutSubValue: std::borrow::BorrowMut<SV>,
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
-        V: 'static,
     {
+
         Kp::new(
             move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
             move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
         )
     }
 }
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Kp")
+            .field("root_ty", &std::any::type_name::<R>())
+            .field("value_ty", &std::any::type_name::<V>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Display
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Kp<{}, {}>",
+            std::any::type_name::<R>(),
+            std::any::type_name::<V>()
+        )
+    }
+}
+
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
 ///
@@ -2264,6 +2309,46 @@ where
     {
         let filtered_extractor = self.extractor.filter(predicate);
         EnumKp::new(filtered_extractor, self.embedder)
+    }
+}
+
+impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Debug
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+    E: Fn(Variant) -> Enum,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EnumKp")
+            .field("enum_ty", &std::any::type_name::<Enum>())
+            .field("variant_ty", &std::any::type_name::<Variant>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Display
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+    E: Fn(Variant) -> Enum,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EnumKp<{}, {}>",
+            std::any::type_name::<Enum>(),
+            std::any::type_name::<Variant>()
+        )
     }
 }
 
@@ -2569,6 +2654,35 @@ mod tests {
         fn identity<'a>() -> KpType<'a, TestKP, TestKP> {
             KpType::identity()
         }
+    }
+
+    #[test]
+    fn kp_debug_display_uses_type_names() {
+        let kp = TestKP::a();
+        let dbg = format!("{kp:?}");
+        assert!(dbg.starts_with("Kp {"), "{dbg}");
+        assert!(dbg.contains("root_ty") && dbg.contains("value_ty"), "{dbg}");
+        let disp = format!("{kp}");
+        assert!(disp.contains("TestKP"), "{disp}");
+        assert!(disp.contains("String"), "{disp}");
+    }
+
+    #[test]
+    fn akp_and_pkp_debug_display() {
+        let akp = AKp::new(TestKP::a());
+        assert!(format!("{akp:?}").starts_with("AKp"));
+        let pkp = PKp::new(TestKP::a());
+        let pkp_dbg = format!("{pkp:?}");
+        assert!(pkp_dbg.starts_with("PKp"), "{pkp_dbg}");
+        assert!(format!("{pkp}").contains("TestKP"));
+    }
+
+    #[test]
+    fn enum_kp_debug_display() {
+        let ok_kp = enum_ok::<i32, String>();
+        assert!(format!("{ok_kp:?}").contains("EnumKp"));
+        let s = format!("{ok_kp}");
+        assert!(s.contains("Result") && s.contains("i32"), "{s}");
     }
 
     #[derive(Debug)]
