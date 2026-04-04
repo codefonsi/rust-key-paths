@@ -199,3 +199,33 @@ fn option_hash_map_enum_variant_at() {
     let e = OptMapEnum::M(Some(HashMap::from([(1u8, "a".to_string())])));
     assert_eq!(OptMapEnum::m_at(1u8).get(&e), Some(&"a".to_string()));
 }
+
+#[derive(Kp)]
+struct WithOptionalVec {
+    items: Option<Vec<i32>>,
+}
+
+#[test]
+fn option_vec_at_index() {
+    let s = WithOptionalVec {
+        items: Some(vec![10, 20]),
+    };
+    assert_eq!(WithOptionalVec::items_at(1).get(&s), Some(&20));
+
+    let mut s = s;
+    WithOptionalVec::items_at(0)
+        .get_mut(&mut s)
+        .map(|x| *x = 99);
+    assert_eq!(s.items, Some(vec![99, 20]));
+}
+
+#[derive(Kp)]
+enum OptVecEnum {
+    V(Option<Vec<u8>>),
+}
+
+#[test]
+fn option_vec_enum_variant_at() {
+    let e = OptVecEnum::V(Some(vec![1, 2, 3]));
+    assert_eq!(OptVecEnum::v_at(2).get(&e), Some(&3u8));
+}
