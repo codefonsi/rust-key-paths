@@ -43,6 +43,7 @@
 //! - Rust's ownership system enforces correctness
 
 use crate::Kp;
+use std::fmt;
 use std::sync::{Arc, Mutex};
 
 /// Trait for types that can provide lock/unlock behavior
@@ -144,6 +145,134 @@ pub struct LockKp<
 
     /// Keypath from Inner to final Value
     pub(crate) next: Kp<Mid, V, MidValue, Value, MutMid, MutValue, G2, S2>,
+}
+
+impl<
+    R,
+    Lock,
+    Mid,
+    V,
+    Root,
+    LockValue,
+    MidValue,
+    Value,
+    MutRoot,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+> fmt::Debug
+    for LockKp<
+        R,
+        Lock,
+        Mid,
+        V,
+        Root,
+        LockValue,
+        MidValue,
+        Value,
+        MutRoot,
+        MutLock,
+        MutMid,
+        MutValue,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >
+where
+    Root: std::borrow::Borrow<R>,
+    LockValue: std::borrow::Borrow<Lock>,
+    MidValue: std::borrow::Borrow<Mid>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutLock: std::borrow::BorrowMut<Lock>,
+    MutMid: std::borrow::BorrowMut<Mid>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G1: Fn(Root) -> Option<LockValue>,
+    S1: Fn(MutRoot) -> Option<MutLock>,
+    L: LockAccess<Lock, MidValue> + LockAccess<Lock, MutMid>,
+    G2: Fn(MidValue) -> Option<Value>,
+    S2: Fn(MutMid) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LockKp")
+            .field("root_ty", &std::any::type_name::<R>())
+            .field("lock_ty", &std::any::type_name::<Lock>())
+            .field("mid_ty", &std::any::type_name::<Mid>())
+            .field("value_ty", &std::any::type_name::<V>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<
+    R,
+    Lock,
+    Mid,
+    V,
+    Root,
+    LockValue,
+    MidValue,
+    Value,
+    MutRoot,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+> fmt::Display
+    for LockKp<
+        R,
+        Lock,
+        Mid,
+        V,
+        Root,
+        LockValue,
+        MidValue,
+        Value,
+        MutRoot,
+        MutLock,
+        MutMid,
+        MutValue,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >
+where
+    Root: std::borrow::Borrow<R>,
+    LockValue: std::borrow::Borrow<Lock>,
+    MidValue: std::borrow::Borrow<Mid>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutLock: std::borrow::BorrowMut<Lock>,
+    MutMid: std::borrow::BorrowMut<Mid>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G1: Fn(Root) -> Option<LockValue>,
+    S1: Fn(MutRoot) -> Option<MutLock>,
+    L: LockAccess<Lock, MidValue> + LockAccess<Lock, MutMid>,
+    G2: Fn(MidValue) -> Option<Value>,
+    S2: Fn(MutMid) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "LockKp<{}, {}, {}, {}>",
+            std::any::type_name::<R>(),
+            std::any::type_name::<Lock>(),
+            std::any::type_name::<Mid>(),
+            std::any::type_name::<V>()
+        )
+    }
 }
 
 impl<
@@ -719,6 +848,32 @@ pub struct KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutVal
     pub(crate) second: Second,
     pub(crate) _p:
         std::marker::PhantomData<(R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2)>,
+}
+
+impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second> fmt::Debug
+    for KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KpThenLockKp")
+            .field("root_ty", &std::any::type_name::<R>())
+            .field("via_ty", &std::any::type_name::<V>())
+            .field("value_ty", &std::any::type_name::<V2>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second> fmt::Display
+    for KpThenLockKp<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "KpThenLockKp<{}, {}, {}>",
+            std::any::type_name::<R>(),
+            std::any::type_name::<V>(),
+            std::any::type_name::<V2>()
+        )
+    }
 }
 
 impl<R, V, V2, Root, Value, Value2, MutRoot, MutValue, MutValue2, First, Second>

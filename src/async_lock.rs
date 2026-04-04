@@ -31,6 +31,7 @@
 
 use crate::{AccessorTrait, Kp, KpTrait};
 use async_trait::async_trait;
+use std::fmt;
 // Re-export tokio sync types for convenience
 #[cfg(feature = "tokio")]
 pub use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -299,6 +300,134 @@ pub struct AsyncLockKp<
 
     /// Keypath from Inner to final Value
     pub(crate) next: Kp<Mid, V, MidValue, Value, MutMid, MutValue, G2, S2>,
+}
+
+impl<
+    R,
+    Lock,
+    Mid,
+    V,
+    Root,
+    LockValue,
+    MidValue,
+    Value,
+    MutRoot,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+> fmt::Debug
+    for AsyncLockKp<
+        R,
+        Lock,
+        Mid,
+        V,
+        Root,
+        LockValue,
+        MidValue,
+        Value,
+        MutRoot,
+        MutLock,
+        MutMid,
+        MutValue,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >
+where
+    Root: std::borrow::Borrow<R>,
+    LockValue: std::borrow::Borrow<Lock>,
+    MidValue: std::borrow::Borrow<Mid>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutLock: std::borrow::BorrowMut<Lock>,
+    MutMid: std::borrow::BorrowMut<Mid>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G1: Fn(Root) -> Option<LockValue> + Clone,
+    S1: Fn(MutRoot) -> Option<MutLock> + Clone,
+    L: AsyncLockLike<Lock, MidValue> + AsyncLockLike<Lock, MutMid> + Clone,
+    G2: Fn(MidValue) -> Option<Value> + Clone,
+    S2: Fn(MutMid) -> Option<MutValue> + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AsyncLockKp")
+            .field("root_ty", &std::any::type_name::<R>())
+            .field("lock_ty", &std::any::type_name::<Lock>())
+            .field("mid_ty", &std::any::type_name::<Mid>())
+            .field("value_ty", &std::any::type_name::<V>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<
+    R,
+    Lock,
+    Mid,
+    V,
+    Root,
+    LockValue,
+    MidValue,
+    Value,
+    MutRoot,
+    MutLock,
+    MutMid,
+    MutValue,
+    G1,
+    S1,
+    L,
+    G2,
+    S2,
+> fmt::Display
+    for AsyncLockKp<
+        R,
+        Lock,
+        Mid,
+        V,
+        Root,
+        LockValue,
+        MidValue,
+        Value,
+        MutRoot,
+        MutLock,
+        MutMid,
+        MutValue,
+        G1,
+        S1,
+        L,
+        G2,
+        S2,
+    >
+where
+    Root: std::borrow::Borrow<R>,
+    LockValue: std::borrow::Borrow<Lock>,
+    MidValue: std::borrow::Borrow<Mid>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutLock: std::borrow::BorrowMut<Lock>,
+    MutMid: std::borrow::BorrowMut<Mid>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G1: Fn(Root) -> Option<LockValue> + Clone,
+    S1: Fn(MutRoot) -> Option<MutLock> + Clone,
+    L: AsyncLockLike<Lock, MidValue> + AsyncLockLike<Lock, MutMid> + Clone,
+    G2: Fn(MidValue) -> Option<Value> + Clone,
+    S2: Fn(MutMid) -> Option<MutValue> + Clone,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "AsyncLockKp<{}, {}, {}, {}>",
+            std::any::type_name::<R>(),
+            std::any::type_name::<Lock>(),
+            std::any::type_name::<Mid>(),
+            std::any::type_name::<V>()
+        )
+    }
 }
 
 impl<

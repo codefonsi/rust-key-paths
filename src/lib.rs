@@ -10,6 +10,7 @@
 // type Getter<R, V, Root, Value> where Root: std::borrow::Borrow<R>, Value: std::borrow::Borrow<V> = fn(Root) -> Option<Value>;
 // type Setter<R, V> = fn(&'r mut R) -> Option<&'r mut V>;
 
+use std::fmt;
 use std::sync::Arc;
 
 // Export the lock module
@@ -686,6 +687,26 @@ impl AKp {
         }
     }
 }
+
+impl fmt::Debug for AKp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AKp")
+            .field("root_type_id", &self.root_type_id)
+            .field("value_type_id", &self.value_type_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Display for AKp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "AKp(root_type_id={:?}, value_type_id={:?})",
+            self.root_type_id, self.value_type_id
+        )
+    }
+}
+
 pub struct PKp<Root> {
     getter: Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn Any>>,
     value_type_id: TypeId,
@@ -890,6 +911,26 @@ where
             value_type_id: orig_type_id,
             _phantom: std::marker::PhantomData,
         }
+    }
+}
+
+impl<Root> fmt::Debug for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PKp")
+            .field("root_ty", &std::any::type_name::<Root>())
+            .field("value_type_id", &self.value_type_id)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Root> fmt::Display for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PKp<{}, value_type_id={:?}>",
+            std::any::type_name::<Root>(),
+            self.value_type_id
+        )
     }
 }
 
@@ -1998,6 +2039,45 @@ where
         )
     }
 }
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Kp")
+            .field("root_ty", &std::any::type_name::<R>())
+            .field("value_ty", &std::any::type_name::<V>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Display
+    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Kp<{}, {}>",
+            std::any::type_name::<R>(),
+            std::any::type_name::<V>()
+        )
+    }
+}
+
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
 ///
@@ -2229,6 +2309,46 @@ where
     {
         let filtered_extractor = self.extractor.filter(predicate);
         EnumKp::new(filtered_extractor, self.embedder)
+    }
+}
+
+impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Debug
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+    E: Fn(Variant) -> Enum,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EnumKp")
+            .field("enum_ty", &std::any::type_name::<Enum>())
+            .field("variant_ty", &std::any::type_name::<Variant>())
+            .finish_non_exhaustive()
+    }
+}
+
+impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Display
+    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+where
+    Root: std::borrow::Borrow<Enum>,
+    Value: std::borrow::Borrow<Variant>,
+    MutRoot: std::borrow::BorrowMut<Enum>,
+    MutValue: std::borrow::BorrowMut<Variant>,
+    G: Fn(Root) -> Option<Value>,
+    S: Fn(MutRoot) -> Option<MutValue>,
+    E: Fn(Variant) -> Enum,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EnumKp<{}, {}>",
+            std::any::type_name::<Enum>(),
+            std::any::type_name::<Variant>()
+        )
     }
 }
 
@@ -2534,6 +2654,35 @@ mod tests {
         fn identity<'a>() -> KpType<'a, TestKP, TestKP> {
             KpType::identity()
         }
+    }
+
+    #[test]
+    fn kp_debug_display_uses_type_names() {
+        let kp = TestKP::a();
+        let dbg = format!("{kp:?}");
+        assert!(dbg.starts_with("Kp {"), "{dbg}");
+        assert!(dbg.contains("root_ty") && dbg.contains("value_ty"), "{dbg}");
+        let disp = format!("{kp}");
+        assert!(disp.contains("TestKP"), "{disp}");
+        assert!(disp.contains("String"), "{disp}");
+    }
+
+    #[test]
+    fn akp_and_pkp_debug_display() {
+        let akp = AKp::new(TestKP::a());
+        assert!(format!("{akp:?}").starts_with("AKp"));
+        let pkp = PKp::new(TestKP::a());
+        let pkp_dbg = format!("{pkp:?}");
+        assert!(pkp_dbg.starts_with("PKp"), "{pkp_dbg}");
+        assert!(format!("{pkp}").contains("TestKP"));
+    }
+
+    #[test]
+    fn enum_kp_debug_display() {
+        let ok_kp = enum_ok::<i32, String>();
+        assert!(format!("{ok_kp:?}").contains("EnumKp"));
+        let s = format!("{ok_kp}");
+        assert!(s.contains("Result") && s.contains("i32"), "{s}");
     }
 
     #[derive(Debug)]

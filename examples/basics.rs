@@ -103,7 +103,7 @@ fn main() {
     let kp = Rectangle::size().set;
 
     let kp = Rectangle::size().then(Size::width());
-    let kp: for<'a> fn(&'a Rectangle) -> Option<&'a u32> = kp.get;
+    let kp= kp.get;
 
     // let x: fn(&Rectangle) -> Option<&Size> = Rectangle::size().get;
     // let y = that_takes(x);
