@@ -312,20 +312,15 @@ pub type KpOptionRefCellType<'a, R, V> = Kp<
     for<'b> fn(&'b mut R) -> Option<std::cell::RefMut<'b, V>>,
 >;
 
-impl<'a, R, V> KpType<'a, R, V>
-where
-    'a: 'static,
-{
-    /// Converts this keypath (KpType) to [KpDynamic] for dynamic dispatch and storage.
-    /// Requires `'a: 'static` so the boxed getter/setter closures can be `'static`.
+impl<'a, R, V> KpType<'a, R, V> {
+    /// Converts this keypath to [KpDynamic] for dynamic dispatch and storage (e.g. in a struct field).
     #[inline]
     pub fn to_dynamic(self) -> KpDynamic<R, V> {
         self.into()
     }
 }
 
-impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>
-{
+impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V> {
     #[inline]
     fn from(kp: KpType<'a, R, V>) -> Self {
         let get_fn = kp.get;
@@ -333,6 +328,63 @@ impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>
         Kp::new(
             Box::new(move |t: &R| get_fn(t)),
             Box::new(move |t: &mut R| set_fn(t)),
+        )
+    }
+}
+
+impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+where
+    Root: std::borrow::Borrow<R>,
+    Value: std::borrow::Borrow<V>,
+    MutRoot: std::borrow::BorrowMut<R>,
+    MutValue: std::borrow::BorrowMut<V>,
+    G: Fn(Root) -> Option<Value> + Send + Sync + 'static,
+    S: Fn(MutRoot) -> Option<MutValue> + Send + Sync + 'static,
+    R: 'static,
+    V: 'static,
+{
+    /// Erases getter/setter type into [`KpDynamic`] so you can store composed paths (e.g. after [KpTrait::then]).
+    ///
+    /// `#[derive(Kp)]` methods return [`KpType`] (`fn` pointers); chaining with `.then()` produces opaque closures.
+    /// Neither matches a fixed `KpType<…>` field type—use `KpDynamic<R, V>` and `.into_dynamic()` (or
+    /// [KpType::to_dynamic] for a single segment).
+    ///
+    /// # Safety
+    ///
+    /// This uses a small amount of `unsafe` internally: it re-interprets `&R` / `&mut R` as `Root` / `MutRoot`.
+    /// That matches every [`Kp`] built from this crate’s public API ([`Kp::new`] on reference-shaped handles,
+    /// `#[derive(Kp)]`, and [KpTrait::then] / [Kp::then] on those paths). Do not call this on a custom [`Kp`]
+    /// whose `Root` / `MutRoot` are not layout-compatible with `&R` / `&mut R` or whose getters keep borrows
+    /// alive past the call.
+    #[inline]
+    pub fn into_dynamic(self) -> KpDynamic<R, V> {
+        let g = self.get;
+        let s = self.set;
+        Kp::new(
+            Box::new(move |t: &R| unsafe {
+                // SAFETY: See `into_dynamic` rustdoc. `Root` is `&'_ R` for supported keypaths.
+                debug_assert_eq!(std::mem::size_of::<Root>(), std::mem::size_of::<&R>());
+                let root: Root = std::mem::transmute_copy(&t);
+                match g(root) {
+                    None => None,
+                    Some(v) => {
+                        let r: &V = std::borrow::Borrow::borrow(&v);
+                        // Well-behaved getters return a view into `*t`; re-attach to this call's `&R`.
+                        Some(std::mem::transmute::<&V, &V>(r))
+                    }
+                }
+            }),
+            Box::new(move |t: &mut R| unsafe {
+                debug_assert_eq!(std::mem::size_of::<MutRoot>(), std::mem::size_of::<&mut R>());
+                let root: MutRoot = std::mem::transmute_copy(&t);
+                match s(root) {
+                    None => None,
+                    Some(mut v) => {
+                        let r: &mut V = std::borrow::BorrowMut::borrow_mut(&mut v);
+                        Some(std::mem::transmute::<&mut V, &mut V>(r))
+                    }
+                }
+            }),
         )
     }
 }
@@ -2683,6 +2735,15 @@ mod tests {
         assert!(format!("{ok_kp:?}").contains("EnumKp"));
         let s = format!("{ok_kp}");
         assert!(s.contains("Result") && s.contains("i32"), "{s}");
+    }
+
+    #[test]
+    fn composed_kp_into_dynamic_stores_as_kp_dynamic() {
+        let path: KpDynamic<TestKP, String> = TestKP::f().then(TestKP2::a()).into_dynamic();
+        let mut t = TestKP::new();
+        assert_eq!(path.get(&t), Some(&"a3".to_string()));
+        path.get_mut(&mut t).map(|s| *s = "x".into());
+        assert_eq!(t.f.as_ref().unwrap().a, "x");
     }
 
     #[derive(Debug)]
