@@ -1,6 +1,7 @@
 use key_paths_derive::Kp;
 use parking_lot::{Mutex, RwLock};
 use std::cell::{RefCell, RefMut};
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -9,6 +10,8 @@ use std::sync::Arc;
 #[derive(Debug, Kp)]
 struct SomeComplexStruct {
     id: String,
+    scfs18: Option<HashMap<String, String>>,
+    scfs19: Option<HashSet<String>>,
     scsf: Option<Box<SomeOtherStruct>>,
     scfs2: Arc<std::sync::Mutex<SomeOtherStruct>>,
     scfs3: Arc<std::sync::RwLock<SomeOtherStruct>>,
@@ -90,6 +93,8 @@ impl SomeComplexStruct {
 
         Self {
             id: String::from("SomeComplexStruct"),
+            scfs18: None,
+            scfs19: None,
             scsf: Some(Box::new(inner.clone())),
             // Arc<std::sync::Mutex/RwLock<T>>
             scfs2: Arc::new(std::sync::Mutex::new(inner.clone())),
@@ -201,6 +206,8 @@ fn main() {
     // And Arc<parking_lot::Mutex<Option<SomeOtherStruct>>>
     let x_pl_m: Option<&SomeOtherStruct> = SomeComplexStruct::scfs_arc_pl_mo().get(&instance);
 
+    let x = SomeComplexStruct::scfs18_at("testing".to_string());
+    println!("x = {:?}", x);
     assert!(x_pl_rw.is_some());
     assert!(x_std_m.is_some());
     assert!(x_std_rw.is_some());

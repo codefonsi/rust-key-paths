@@ -1,5 +1,6 @@
 use key_paths_derive::{Akp, Kp, Pkp};
-use rust_key_paths::KpType;
+use rust_key_paths::{KpTrait, KpType};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Kp, Pkp, Akp)]
 struct Person {
@@ -160,4 +161,41 @@ fn test_any_kps() {
 
     let age_val = kps[1].get_as::<Person, i32>(&person);
     assert_eq!(age_val, Some(Some(&28)));
+}
+
+#[derive(Kp)]
+struct WithOptionalCollections {
+    map: Option<HashMap<String, i32>>,
+    set: Option<HashSet<String>>,
+}
+
+#[test]
+fn option_hash_map_at_returns_value_ref() {
+    let s = WithOptionalCollections {
+        map: Some(HashMap::from([("k".to_string(), 42)])),
+        set: Some(HashSet::from(["x".to_string()])),
+    };
+    assert_eq!(WithOptionalCollections::map_at("k".to_string()).get(&s), Some(&42));
+
+    let mut s = s;
+    WithOptionalCollections::map_at("k".to_string())
+        .get_mut(&mut s)
+        .map(|v| *v += 1);
+    assert_eq!(s.map.as_ref().unwrap().get("k"), Some(&43));
+
+    assert_eq!(
+        WithOptionalCollections::set_at("x".to_string()).get(&s),
+        Some(&"x".to_string())
+    );
+}
+
+#[derive(Kp)]
+enum OptMapEnum {
+    M(Option<HashMap<u8, String>>),
+}
+
+#[test]
+fn option_hash_map_enum_variant_at() {
+    let e = OptMapEnum::M(Some(HashMap::from([(1u8, "a".to_string())])));
+    assert_eq!(OptMapEnum::m_at(1u8).get(&e), Some(&"a".to_string()));
 }

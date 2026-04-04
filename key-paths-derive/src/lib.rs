@@ -624,6 +624,24 @@ fn extract_map_key_value(ty: &Type) -> Option<(Type, Type)> {
     None
 }
 
+/// For `Option<HashMap<K,V>>` / `Option<BTreeMap<K,V>>`, returns `Some((key_ty, value_ty))`.
+fn extract_map_key_value_through_option(ty: &Type) -> Option<(Type, Type)> {
+    use syn::{GenericArgument, PathArguments};
+
+    if let Type::Path(tp) = ty {
+        if let Some(seg) = tp.path.segments.last() {
+            if seg.ident == "Option" {
+                if let PathArguments::AngleBracketed(ab) = &seg.arguments {
+                    if let Some(GenericArgument::Type(inner)) = ab.args.first() {
+                        return extract_map_key_value(inner);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn to_snake_case(name: &str) -> String {
     let mut out = String::new();
     for (i, c) in name.chars().enumerate() {
@@ -789,13 +807,148 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
+                        (WrapperKind::OptionHashMap, Some(inner_ty)) => {
+                            if let Some((key_ty, _)) = extract_map_key_value_through_option(ty) {
+                                let type_name = name.to_string();
+                                let whole_fn = kp_fn.to_string();
+                                let at_fn = kp_at_fn.to_string();
+                                let whole_doc = format!(
+                                    "Keypath to the whole optional `HashMap` (`{type_name}::{whole_fn}`). For a value at one key when the map is `Some`, use `{type_name}::{at_fn}(key)`."
+                                );
+                                let at_doc = format!(
+                                    "Keyed access into the inner `HashMap` (`{type_name}::{at_fn}`). `get`/`get_mut` return `None` if the field is `None` or the key is missing. See also `{type_name}::{whole_fn}` for the full optional map."
+                                );
+                                tokens.extend(quote! {
+                                    #[doc = #whole_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        )
+                                    }
+                                    #[doc = #at_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_at_fn(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                    where
+                                        #key_ty: Clone + std::hash::Hash + Eq + 'static,
+                                    {
+                                        let key2 = key.clone();
+                                        rust_key_paths::Kp::new(
+                                            Box::new(move |root: &#name| root.#field_ident.as_ref().and_then(|m| m.get(&key))),
+                                            Box::new(move |root: &mut #name| root.#field_ident.as_mut().and_then(|m| m.get_mut(&key2))),
+                                        )
+                                    }
+                                });
+                            } else {
+                                tokens.extend(quote! {
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        )
+                                    }
+                                });
+                            }
+                        }
+                        (WrapperKind::OptionBTreeMap, Some(inner_ty)) => {
+                            if let Some((key_ty, _)) = extract_map_key_value_through_option(ty) {
+                                let type_name = name.to_string();
+                                let whole_fn = kp_fn.to_string();
+                                let at_fn = kp_at_fn.to_string();
+                                let whole_doc = format!(
+                                    "Keypath to the whole optional `BTreeMap` (`{type_name}::{whole_fn}`). For a value at one key when the map is `Some`, use `{type_name}::{at_fn}(key)`."
+                                );
+                                let at_doc = format!(
+                                    "Keyed access into the inner `BTreeMap` (`{type_name}::{at_fn}`). `get`/`get_mut` return `None` if the field is `None` or the key is missing. See also `{type_name}::{whole_fn}` for the full optional map."
+                                );
+                                tokens.extend(quote! {
+                                    #[doc = #whole_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        )
+                                    }
+                                    #[doc = #at_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_at_fn(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                    where
+                                        #key_ty: Clone + Ord + 'static,
+                                    {
+                                        let key2 = key.clone();
+                                        rust_key_paths::Kp::new(
+                                            Box::new(move |root: &#name| root.#field_ident.as_ref().and_then(|m| m.get(&key))),
+                                            Box::new(move |root: &mut #name| root.#field_ident.as_mut().and_then(|m| m.get_mut(&key2))),
+                                        )
+                                    }
+                                });
+                            } else {
+                                tokens.extend(quote! {
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#field_ident),
+                                            |root: &mut #name| Some(&mut root.#field_ident),
+                                        )
+                                    }
+                                });
+                            }
+                        }
+                        (WrapperKind::OptionHashSet, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+
+                                /// _at: check if element exists and get reference.
+                                /// HashSet does not allow mutable element access (would break hash invariant).
+                                #[inline(always)]
+                                pub fn #kp_at_fn(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                where
+                                    #inner_ty: Clone + std::hash::Hash + Eq + 'static,
+                                {
+                                    rust_key_paths::Kp::new(
+                                        Box::new(move |root: &#name| root.#field_ident.as_ref().and_then(|s| s.get(&key))),
+                                        Box::new(move |_root: &mut #name| None),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionBTreeSet, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#field_ident),
+                                        |root: &mut #name| Some(&mut root.#field_ident),
+                                    )
+                                }
+
+                                /// _at: check if element exists and get reference.
+                                /// BTreeSet does not allow mutable element access (would break ordering invariant).
+                                #[inline(always)]
+                                pub fn #kp_at_fn(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                where
+                                    #inner_ty: Clone + Ord + 'static,
+                                {
+                                    rust_key_paths::Kp::new(
+                                        Box::new(move |root: &#name| root.#field_ident.as_ref().and_then(|s| s.get(&key))),
+                                        Box::new(move |_root: &mut #name| None),
+                                    )
+                                }
+                            });
+                        }
                         (WrapperKind::OptionVecDeque, Some(_inner_ty))
                         | (WrapperKind::OptionLinkedList, Some(_inner_ty))
                         | (WrapperKind::OptionBinaryHeap, Some(_inner_ty))
-                        | (WrapperKind::OptionHashSet, Some(_inner_ty))
-                        | (WrapperKind::OptionBTreeSet, Some(_inner_ty))
-                        | (WrapperKind::OptionResult, Some(_inner_ty))
-                        | (WrapperKind::OptionBTreeMap, Some(_inner_ty)) => {
+                        | (WrapperKind::OptionResult, Some(_inner_ty)) => {
                             // Keypath to the Option container (reference), like Vec/HashSet
                             tokens.extend(quote! {
                                 #[inline(always)]
@@ -2102,13 +2255,148 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                             });
                         }
+                        (WrapperKind::OptionHashMap, Some(inner_ty)) => {
+                            if let Some((key_ty, _)) = extract_map_key_value_through_option(ty) {
+                                let type_name = name.to_string();
+                                let whole_fn = kp_fn.to_string();
+                                let at_fn = kp_at_fn.to_string();
+                                let whole_doc = format!(
+                                    "Keypath to the whole optional `HashMap` (`{type_name}::{whole_fn}`). For a value at one key when the map is `Some`, use `{type_name}::{at_fn}(key)`."
+                                );
+                                let at_doc = format!(
+                                    "Keyed access into the inner `HashMap` (`{type_name}::{at_fn}`). `get`/`get_mut` return `None` if the field is `None` or the key is missing. See also `{type_name}::{whole_fn}` for the full optional map."
+                                );
+                                tokens.extend(quote! {
+                                    #[doc = #whole_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#idx_lit),
+                                            |root: &mut #name| Some(&mut root.#idx_lit),
+                                        )
+                                    }
+                                    #[doc = #at_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_at_fn(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                    where
+                                        #key_ty: Clone + std::hash::Hash + Eq + 'static,
+                                    {
+                                        let key2 = key.clone();
+                                        rust_key_paths::Kp::new(
+                                            Box::new(move |root: &#name| root.#idx_lit.as_ref().and_then(|m| m.get(&key))),
+                                            Box::new(move |root: &mut #name| root.#idx_lit.as_mut().and_then(|m| m.get_mut(&key2))),
+                                        )
+                                    }
+                                });
+                            } else {
+                                tokens.extend(quote! {
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#idx_lit),
+                                            |root: &mut #name| Some(&mut root.#idx_lit),
+                                        )
+                                    }
+                                });
+                            }
+                        }
+                        (WrapperKind::OptionBTreeMap, Some(inner_ty)) => {
+                            if let Some((key_ty, _)) = extract_map_key_value_through_option(ty) {
+                                let type_name = name.to_string();
+                                let whole_fn = kp_fn.to_string();
+                                let at_fn = kp_at_fn.to_string();
+                                let whole_doc = format!(
+                                    "Keypath to the whole optional `BTreeMap` (`{type_name}::{whole_fn}`). For a value at one key when the map is `Some`, use `{type_name}::{at_fn}(key)`."
+                                );
+                                let at_doc = format!(
+                                    "Keyed access into the inner `BTreeMap` (`{type_name}::{at_fn}`). `get`/`get_mut` return `None` if the field is `None` or the key is missing. See also `{type_name}::{whole_fn}` for the full optional map."
+                                );
+                                tokens.extend(quote! {
+                                    #[doc = #whole_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#idx_lit),
+                                            |root: &mut #name| Some(&mut root.#idx_lit),
+                                        )
+                                    }
+                                    #[doc = #at_doc]
+                                    #[inline(always)]
+                                    pub fn #kp_at_fn(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                    where
+                                        #key_ty: Clone + Ord + 'static,
+                                    {
+                                        let key2 = key.clone();
+                                        rust_key_paths::Kp::new(
+                                            Box::new(move |root: &#name| root.#idx_lit.as_ref().and_then(|m| m.get(&key))),
+                                            Box::new(move |root: &mut #name| root.#idx_lit.as_mut().and_then(|m| m.get_mut(&key2))),
+                                        )
+                                    }
+                                });
+                            } else {
+                                tokens.extend(quote! {
+                                    #[inline(always)]
+                                    pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                        rust_key_paths::Kp::new(
+                                            |root: &#name| Some(&root.#idx_lit),
+                                            |root: &mut #name| Some(&mut root.#idx_lit),
+                                        )
+                                    }
+                                });
+                            }
+                        }
+                        (WrapperKind::OptionHashSet, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#idx_lit),
+                                        |root: &mut #name| Some(&mut root.#idx_lit),
+                                    )
+                                }
+
+                                /// _at: check if element exists and get reference.
+                                /// HashSet does not allow mutable element access (would break hash invariant).
+                                #[inline(always)]
+                                pub fn #kp_at_fn(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                where
+                                    #inner_ty: Clone + std::hash::Hash + Eq + 'static,
+                                {
+                                    rust_key_paths::Kp::new(
+                                        Box::new(move |root: &#name| root.#idx_lit.as_ref().and_then(|s| s.get(&key))),
+                                        Box::new(move |_root: &mut #name| None),
+                                    )
+                                }
+                            });
+                        }
+                        (WrapperKind::OptionBTreeSet, Some(inner_ty)) => {
+                            tokens.extend(quote! {
+                                #[inline(always)]
+                                pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
+                                    rust_key_paths::Kp::new(
+                                        |root: &#name| Some(&root.#idx_lit),
+                                        |root: &mut #name| Some(&mut root.#idx_lit),
+                                    )
+                                }
+
+                                /// _at: check if element exists and get reference.
+                                /// BTreeSet does not allow mutable element access (would break ordering invariant).
+                                #[inline(always)]
+                                pub fn #kp_at_fn(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                where
+                                    #inner_ty: Clone + Ord + 'static,
+                                {
+                                    rust_key_paths::Kp::new(
+                                        Box::new(move |root: &#name| root.#idx_lit.as_ref().and_then(|s| s.get(&key))),
+                                        Box::new(move |_root: &mut #name| None),
+                                    )
+                                }
+                            });
+                        }
                         (WrapperKind::OptionVecDeque, Some(_inner_ty))
                         | (WrapperKind::OptionLinkedList, Some(_inner_ty))
                         | (WrapperKind::OptionBinaryHeap, Some(_inner_ty))
-                        | (WrapperKind::OptionHashSet, Some(_inner_ty))
-                        | (WrapperKind::OptionBTreeSet, Some(_inner_ty))
-                        | (WrapperKind::OptionResult, Some(_inner_ty))
-                        | (WrapperKind::OptionBTreeMap, Some(_inner_ty)) => {
+                        | (WrapperKind::OptionResult, Some(_inner_ty)) => {
                             tokens.extend(quote! {
                                 #[inline(always)]
                                 pub fn #kp_fn() -> rust_key_paths::KpType<'static, #name, #ty> {
@@ -2992,13 +3280,184 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                         }
                                     });
                                 }
+                                (WrapperKind::OptionHashMap, Some(inner_ty)) => {
+                                    let snake_at = format_ident!("{}_at", snake);
+                                    if let Some((key_ty, _)) = extract_map_key_value_through_option(field_ty) {
+                                        tokens.extend(quote! {
+                                            #[inline(always)]
+                                            pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                    |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                )
+                                            }
+                                            #[inline(always)]
+                                            pub fn #snake_at(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                            where
+                                                #key_ty: Clone + std::hash::Hash + Eq + 'static,
+                                            {
+                                                let key2 = key.clone();
+                                                rust_key_paths::Kp::new(
+                                                    Box::new(move |root: &#name| match root {
+                                                        #name::#v_ident(inner) => inner.as_ref().and_then(|m| m.get(&key)),
+                                                        _ => None,
+                                                    }),
+                                                    Box::new(move |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => inner.as_mut().and_then(|m| m.get_mut(&key2)),
+                                                        _ => None,
+                                                    }),
+                                                )
+                                            }
+                                        });
+                                    } else {
+                                        tokens.extend(quote! {
+                                            #[inline(always)]
+                                            pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                    |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                )
+                                            }
+                                        });
+                                    }
+                                }
+                                (WrapperKind::OptionBTreeMap, Some(inner_ty)) => {
+                                    let snake_at = format_ident!("{}_at", snake);
+                                    if let Some((key_ty, _)) = extract_map_key_value_through_option(field_ty) {
+                                        tokens.extend(quote! {
+                                            #[inline(always)]
+                                            pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                    |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                )
+                                            }
+                                            #[inline(always)]
+                                            pub fn #snake_at(key: #key_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                            where
+                                                #key_ty: Clone + Ord + 'static,
+                                            {
+                                                let key2 = key.clone();
+                                                rust_key_paths::Kp::new(
+                                                    Box::new(move |root: &#name| match root {
+                                                        #name::#v_ident(inner) => inner.as_ref().and_then(|m| m.get(&key)),
+                                                        _ => None,
+                                                    }),
+                                                    Box::new(move |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => inner.as_mut().and_then(|m| m.get_mut(&key2)),
+                                                        _ => None,
+                                                    }),
+                                                )
+                                            }
+                                        });
+                                    } else {
+                                        tokens.extend(quote! {
+                                            #[inline(always)]
+                                            pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                                rust_key_paths::Kp::new(
+                                                    |root: &#name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                    |root: &mut #name| match root {
+                                                        #name::#v_ident(inner) => Some(inner),
+                                                        _ => None,
+                                                    },
+                                                )
+                                            }
+                                        });
+                                    }
+                                }
+                                (WrapperKind::OptionHashSet, Some(inner_ty)) => {
+                                    let snake_at = format_ident!("{}_at", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => Some(inner),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => Some(inner),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+
+                                        /// _at: check if element exists and get reference.
+                                        /// HashSet does not allow mutable element access (would break hash invariant).
+                                        #[inline(always)]
+                                        pub fn #snake_at(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                        where
+                                            #inner_ty: Clone + std::hash::Hash + Eq + 'static,
+                                        {
+                                            rust_key_paths::Kp::new(
+                                                Box::new(move |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_ref().and_then(|s| s.get(&key)),
+                                                    _ => None,
+                                                }),
+                                                Box::new(move |_root: &mut #name| None),
+                                            )
+                                        }
+                                    });
+                                }
+                                (WrapperKind::OptionBTreeSet, Some(inner_ty)) => {
+                                    let snake_at = format_ident!("{}_at", snake);
+                                    tokens.extend(quote! {
+                                        #[inline(always)]
+                                        pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
+                                            rust_key_paths::Kp::new(
+                                                |root: &#name| match root {
+                                                    #name::#v_ident(inner) => Some(inner),
+                                                    _ => None,
+                                                },
+                                                |root: &mut #name| match root {
+                                                    #name::#v_ident(inner) => Some(inner),
+                                                    _ => None,
+                                                },
+                                            )
+                                        }
+
+                                        /// _at: check if element exists and get reference.
+                                        /// BTreeSet does not allow mutable element access (would break ordering invariant).
+                                        #[inline(always)]
+                                        pub fn #snake_at(key: #inner_ty) -> rust_key_paths::KpDynamic<#name, #inner_ty>
+                                        where
+                                            #inner_ty: Clone + Ord + 'static,
+                                        {
+                                            rust_key_paths::Kp::new(
+                                                Box::new(move |root: &#name| match root {
+                                                    #name::#v_ident(inner) => inner.as_ref().and_then(|s| s.get(&key)),
+                                                    _ => None,
+                                                }),
+                                                Box::new(move |_root: &mut #name| None),
+                                            )
+                                        }
+                                    });
+                                }
                                 (WrapperKind::OptionVecDeque, Some(_inner_ty))
                                 | (WrapperKind::OptionLinkedList, Some(_inner_ty))
                                 | (WrapperKind::OptionBinaryHeap, Some(_inner_ty))
-                                | (WrapperKind::OptionHashSet, Some(_inner_ty))
-                                | (WrapperKind::OptionBTreeSet, Some(_inner_ty))
-                                | (WrapperKind::OptionResult, Some(_inner_ty))
-                                | (WrapperKind::OptionBTreeMap, Some(_inner_ty)) => {
+                                | (WrapperKind::OptionResult, Some(_inner_ty)) => {
                                     tokens.extend(quote! {
                                         #[inline(always)]
                                         pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
