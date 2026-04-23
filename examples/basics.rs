@@ -5,7 +5,7 @@
 use std::process::Output;
 
 use key_paths_derive::Kp;
-use rust_key_paths::{CoercionTrait, KpDynamic, KpTrait};
+use rust_key_paths::{CoercionTrait, HofTrait, KpDynamic, KpTrait};
 
 pub struct Service {
     rect_to_width_kp: KpDynamic<Rectangle, u32>,
@@ -112,7 +112,13 @@ fn main() {
 
     // let x = Rectangle::kp().get(todo!());
     // let x = Rectangle::kp().get_mut(todo!());
-    println!("Updated rectangle: {:?}", rect);
+
+    let x = Rectangle::size().then(Size::width()).filter(filter_width).get(&rect);
+    println!("rect after filter =: {:?}", x.is_some());
+}
+
+fn filter_width(val: &u32) -> bool {
+    false
 }
 
 fn that_takes(f: fn(&Rectangle) -> Option<&Size>) -> for<'a> fn(&'a Rectangle) -> String {
