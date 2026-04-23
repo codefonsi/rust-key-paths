@@ -1,5 +1,6 @@
 use key_paths_derive::Kp;
 use rust_key_paths::KpType;
+use rust_key_paths::KpTrait;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque};
