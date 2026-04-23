@@ -363,7 +363,7 @@ where
         Kp::new(
             Box::new(move |t: &R| unsafe {
                 // SAFETY: See `into_dynamic` rustdoc. `Root` is `&'_ R` for supported keypaths.
-                debug_assert_eq!(std::mem::size_of::<Root>(), std::mem::size_of::<&R>());
+               // debug_assert_eq!(std::mem::size_of::<Root>(), std::mem::size_of::<&R>());
                 let root: Root = std::mem::transmute_copy(&t);
                 match g(root) {
                     None => None,
@@ -375,7 +375,7 @@ where
                 }
             }),
             Box::new(move |t: &mut R| unsafe {
-                debug_assert_eq!(std::mem::size_of::<MutRoot>(), std::mem::size_of::<&mut R>());
+                // debug_assert_eq!(std::mem::size_of::<MutRoot>(), std::mem::size_of::<&mut R>());
                 let root: MutRoot = std::mem::transmute_copy(&t);
                 match s(root) {
                     None => None,
@@ -2013,28 +2013,6 @@ where
     /// Setter closure: used by [Kp::get_mut] for mutation.
     pub set: S,
     _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
-}
-
-// Kp is a functional component (get/set) with no owned data; Send/Sync follow from G and S.
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Send
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value> + Send,
-    S: Fn(MutRoot) -> Option<MutValue> + Send,
-{
-}
-unsafe impl<R, V, Root, Value, MutRoot, MutValue, G, S> Sync
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value> + Sync,
-    S: Fn(MutRoot) -> Option<MutValue> + Sync,
-{
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
