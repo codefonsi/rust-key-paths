@@ -99,8 +99,11 @@ fn main() {
     // let kp = |root: &mut Rectangle| {(Rectangle::size().set)(root)};
     // let x:fn() = || {};
 
-    let kp = Rectangle::size().get;
+    let kp = Rectangle::size();
+    println!("==={:?}", size_of_val(&kp));
     let kp = Rectangle::size().set;
+
+    println!("{:?}", size_of_val(&kp));
 
     let kp = Rectangle::size().then(Size::width());
     let kp= kp.get;
@@ -112,13 +115,7 @@ fn main() {
 
     // let x = Rectangle::kp().get(todo!());
     // let x = Rectangle::kp().get_mut(todo!());
-
-    let x = Rectangle::size().then(Size::width()).filter(filter_width).get(&rect);
-    println!("rect after filter =: {:?}", x.is_some());
-}
-
-fn filter_width(val: &u32) -> bool {
-    false
+    println!("Updated rectangle: {:?}", rect);
 }
 
 fn that_takes(f: fn(&Rectangle) -> Option<&Size>) -> for<'a> fn(&'a Rectangle) -> String {
