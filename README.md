@@ -282,4 +282,5 @@ Todos
 9. pub trait ChainExt
 10. pub trait AccessorTrait
 11. pub trait CoercionTrait
-12. pub trait HofTrait
+12. pub trait HofTrait - fn map
+13. Helper functions
