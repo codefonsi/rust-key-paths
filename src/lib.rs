@@ -2013,7 +2013,7 @@ where
 ///
 /// When mutating through a Kp, the **setter path** is used—`get_mut` invokes the `set` closure,
 /// not the `get` closure. The getter is for read-only access only.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Kp<R, V, G, S>
 where
     G: for<'r> Fn(&'r R) -> Option<&'r V>,
@@ -2026,14 +2026,10 @@ where
     _p: std::marker::PhantomData<(R, V)>,
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+impl<R, V, G, S> Kp<R, V, G, S>
 where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
 {
     pub fn new(get: G, set: S) -> Self {
         Self {
@@ -2054,24 +2050,19 @@ where
     // }
 
     #[inline]
-    pub fn then<SV, SubValue, MutSubValue, G2, S2>(
+    pub fn then<SV, G2, S2>(
         self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+        next: Kp<V, SV, G2, S2>,
     ) -> Kp<
         R,
         SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
+        impl for<'r> Fn(&'r R) -> Option<&'r SV>,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut SV>,
     >
     where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
+        G2: for<'r> Fn(&'r V) -> Option<&'r SV>,
+        S2: for<'r> Fn(&'r mut V) -> Option<&'r mut SV>,
+        for<'r> V:  'r
     {
         let first_get = self.get;
         let first_set = self.set;
@@ -2079,49 +2070,49 @@ where
         let second_set = next.set;
 
         Kp::new(
-            move |root: Root| first_get(root).and_then(|value| second_get(value)),
-            move |root: MutRoot| first_set(root).and_then(|value| second_set(value)),
+            move |root| first_get(root).and_then(|value| second_get(value)),
+            move |root| first_set(root).and_then(|value| second_set(value)),
         )
     }
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Kp")
-            .field("root_ty", &std::any::type_name::<R>())
-            .field("value_ty", &std::any::type_name::<V>())
-            .finish_non_exhaustive()
-    }
-}
+// impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
+//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+// {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("Kp")
+//             .field("root_ty", &std::any::type_name::<R>())
+//             .field("value_ty", &std::any::type_name::<V>())
+//             .finish_non_exhaustive()
+//     }
+// }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Display
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Kp<{}, {}>",
-            std::any::type_name::<R>(),
-            std::any::type_name::<V>()
-        )
-    }
-}
+// impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Display
+//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+// {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(
+//             f,
+//             "Kp<{}, {}>",
+//             std::any::type_name::<R>(),
+//             std::any::type_name::<V>()
+//         )
+//     }
+// }
 
 /// Zip two keypaths together to create a tuple
 /// Works only with KpType (reference-based keypaths)
