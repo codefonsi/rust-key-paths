@@ -31,6 +31,8 @@ pub use lock::{
 // Export the async_lock module
 pub mod async_lock;
 
+type KpDynamic<R, V> = Kp<R, V, dyn for<'r> Fn(&'r R) -> Option<&'r V>, dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V>>;
+
 // pub struct KpStatic<R, V> {
 //     pub get: fn(&R) -> Option<&V>,
 //     pub set: fn(&mut R) -> Option<&mut V>,
@@ -89,236 +91,236 @@ impl<T> KeyPathValueTarget for &mut T {
     type Target = T;
 }
 
-/// Build a keypath from `Type.field` segments. Use with types that have keypath accessors (e.g. `#[derive(Kp)]` from key-paths-derive).
-#[macro_export]
-macro_rules! keypath {
-    { $root:ident . $field:ident } => { $root::$field() };
-    { $root:ident . $field:ident . $($ty:ident . $f:ident).+ } => {
-        $root::$field() $(.then($ty::$f()))+
-    };
-    ($root:ident . $field:ident) => { $root::$field() };
-    ($root:ident . $field:ident . $($ty:ident . $f:ident).+) => {
-        $root::$field() $(.then($ty::$f()))+
-    };
-}
+// /// Build a keypath from `Type.field` segments. Use with types that have keypath accessors (e.g. `#[derive(Kp)]` from key-paths-derive).
+// #[macro_export]
+// macro_rules! keypath {
+//     { $root:ident . $field:ident } => { $root::$field() };
+//     { $root:ident . $field:ident . $($ty:ident . $f:ident).+ } => {
+//         $root::$field() $(.then($ty::$f()))+
+//     };
+//     ($root:ident . $field:ident) => { $root::$field() };
+//     ($root:ident . $field:ident . $($ty:ident . $f:ident).+) => {
+//         $root::$field() $(.then($ty::$f()))+
+//     };
+// }
 
-/// Get value through a keypath or a default reference when the path returns `None`.
-/// Use with `KpType`: `get_or!(User::name(), &user, &default)` where `default` is `&T` (same type as the path value). Returns `&T`.
-/// Path syntax: `get_or!(&user => User.name, &default)`.
-#[macro_export]
-macro_rules! get_or {
-    ($kp:expr, $root:expr, $default:expr) => {
-        $kp.get($root).unwrap_or($default)
-    };
-    ($root:expr => $($path:tt)*, $default:expr) => {
-        $crate::get_or!($crate::keypath!($($path)*), $root, $default)
-    };
-}
+// /// Get value through a keypath or a default reference when the path returns `None`.
+// /// Use with `KpType`: `get_or!(User::name(), &user, &default)` where `default` is `&T` (same type as the path value). Returns `&T`.
+// /// Path syntax: `get_or!(&user => User.name, &default)`.
+// #[macro_export]
+// macro_rules! get_or {
+//     ($kp:expr, $root:expr, $default:expr) => {
+//         $kp.get($root).unwrap_or($default)
+//     };
+//     ($root:expr => $($path:tt)*, $default:expr) => {
+//         $crate::get_or!($crate::keypath!($($path)*), $root, $default)
+//     };
+// }
 
-/// Get value through a keypath, or compute an owned fallback when the path returns `None`.
-/// Use with `KpType`: `get_or_else!(User::name(), &user, || "default".to_string())`.
-/// Returns `T` (owned). The keypath's value type must be `Clone`. The closure is only called when the path is `None`.
-/// Path syntax: `get_or_else!(&user => (User.name), || "default".to_string())` — path in parentheses.
-#[macro_export]
-macro_rules! get_or_else {
-    ($kp:expr, $root:expr, $closure:expr) => {
-        $kp.get($root).map(|r| r.clone()).unwrap_or_else($closure)
-    };
-    ($root:expr => ($($path:tt)*), $closure:expr) => {
-        $crate::get_or_else!($crate::keypath!($($path)*), $root, $closure)
-    };
-}
+// /// Get value through a keypath, or compute an owned fallback when the path returns `None`.
+// /// Use with `KpType`: `get_or_else!(User::name(), &user, || "default".to_string())`.
+// /// Returns `T` (owned). The keypath's value type must be `Clone`. The closure is only called when the path is `None`.
+// /// Path syntax: `get_or_else!(&user => (User.name), || "default".to_string())` — path in parentheses.
+// #[macro_export]
+// macro_rules! get_or_else {
+//     ($kp:expr, $root:expr, $closure:expr) => {
+//         $kp.get($root).map(|r| r.clone()).unwrap_or_else($closure)
+//     };
+//     ($root:expr => ($($path:tt)*), $closure:expr) => {
+//         $crate::get_or_else!($crate::keypath!($($path)*), $root, $closure)
+//     };
+// }
 
-/// Zip multiple keypaths on the same root and apply a closure to the tuple of values.
-/// Returns `Some(closure((v1, v2, ...)))` when all keypaths succeed, else `None`.
-///
-/// # Example
-/// ```
-/// use rust_key_paths::{Kp, KpType, zip_with_kp};
-/// struct User { name: String, age: u32, city: String }
-/// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-/// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
-/// let city_kp = KpType::new(|u: &User| Some(&u.city), |u: &mut User| Some(&mut u.city));
-/// let user = User { name: "Akash".into(), age: 30, city: "NYC".into() };
-/// let summary = zip_with_kp!(
-///     &user,
-///     |(name, age, city)| format!("{}, {} from {}", name, age, city) =>
-///     name_kp,
-///     age_kp,
-///     city_kp
-/// );
-/// assert_eq!(summary, Some("Akash, 30 from NYC".to_string()));
-/// ```
-#[macro_export]
-macro_rules! zip_with_kp {
-    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr) => {
-        match ($kp1.get($root), $kp2.get($root)) {
-            (Some(__a), Some(__b)) => Some($closure((__a, __b))),
-            _ => None,
-        }
-    };
-    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr) => {
-        match ($kp1.get($root), $kp2.get($root), $kp3.get($root)) {
-            (Some(__a), Some(__b), Some(__c)) => Some($closure((__a, __b, __c))),
-            _ => None,
-        }
-    };
-    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr) => {
-        match (
-            $kp1.get($root),
-            $kp2.get($root),
-            $kp3.get($root),
-            $kp4.get($root),
-        ) {
-            (Some(__a), Some(__b), Some(__c), Some(__d)) => Some($closure((__a, __b, __c, __d))),
-            _ => None,
-        }
-    };
-    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr) => {
-        match (
-            $kp1.get($root),
-            $kp2.get($root),
-            $kp3.get($root),
-            $kp4.get($root),
-            $kp5.get($root),
-        ) {
-            (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e)) => {
-                Some($closure((__a, __b, __c, __d, __e)))
-            }
-            _ => None,
-        }
-    };
-    ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr, $kp6:expr) => {
-        match (
-            $kp1.get($root),
-            $kp2.get($root),
-            $kp3.get($root),
-            $kp4.get($root),
-            $kp5.get($root),
-            $kp6.get($root),
-        ) {
-            (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e), Some(__f)) => {
-                Some($closure((__a, __b, __c, __d, __e, __f)))
-            }
-            _ => None,
-        }
-    };
-}
+// /// Zip multiple keypaths on the same root and apply a closure to the tuple of values.
+// /// Returns `Some(closure((v1, v2, ...)))` when all keypaths succeed, else `None`.
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::{Kp, KpType, zip_with_kp};
+// /// struct User { name: String, age: u32, city: String }
+// /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
+// /// let age_kp = KpType::new(|u: &User| Some(&u.age), |u: &mut User| Some(&mut u.age));
+// /// let city_kp = KpType::new(|u: &User| Some(&u.city), |u: &mut User| Some(&mut u.city));
+// /// let user = User { name: "Akash".into(), age: 30, city: "NYC".into() };
+// /// let summary = zip_with_kp!(
+// ///     &user,
+// ///     |(name, age, city)| format!("{}, {} from {}", name, age, city) =>
+// ///     name_kp,
+// ///     age_kp,
+// ///     city_kp
+// /// );
+// /// assert_eq!(summary, Some("Akash, 30 from NYC".to_string()));
+// /// ```
+// #[macro_export]
+// macro_rules! zip_with_kp {
+//     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr) => {
+//         match ($kp1.get($root), $kp2.get($root)) {
+//             (Some(__a), Some(__b)) => Some($closure((__a, __b))),
+//             _ => None,
+//         }
+//     };
+//     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr) => {
+//         match ($kp1.get($root), $kp2.get($root), $kp3.get($root)) {
+//             (Some(__a), Some(__b), Some(__c)) => Some($closure((__a, __b, __c))),
+//             _ => None,
+//         }
+//     };
+//     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr) => {
+//         match (
+//             $kp1.get($root),
+//             $kp2.get($root),
+//             $kp3.get($root),
+//             $kp4.get($root),
+//         ) {
+//             (Some(__a), Some(__b), Some(__c), Some(__d)) => Some($closure((__a, __b, __c, __d))),
+//             _ => None,
+//         }
+//     };
+//     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr) => {
+//         match (
+//             $kp1.get($root),
+//             $kp2.get($root),
+//             $kp3.get($root),
+//             $kp4.get($root),
+//             $kp5.get($root),
+//         ) {
+//             (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e)) => {
+//                 Some($closure((__a, __b, __c, __d, __e)))
+//             }
+//             _ => None,
+//         }
+//     };
+//     ($root:expr, $closure:expr => $kp1:expr, $kp2:expr, $kp3:expr, $kp4:expr, $kp5:expr, $kp6:expr) => {
+//         match (
+//             $kp1.get($root),
+//             $kp2.get($root),
+//             $kp3.get($root),
+//             $kp4.get($root),
+//             $kp5.get($root),
+//             $kp6.get($root),
+//         ) {
+//             (Some(__a), Some(__b), Some(__c), Some(__d), Some(__e), Some(__f)) => {
+//                 Some($closure((__a, __b, __c, __d, __e, __f)))
+//             }
+//             _ => None,
+//         }
+//     };
+// }
 
-/// Kp will force dev to create get and set while value will be owned
-pub type KpValue<'a, R, V> = Kp<
-    R,
-    V,
-    &'a R,
-    V, // Returns owned V, not &V
-    &'a mut R,
-    V, // Returns owned V, not &mut V
-    for<'b> fn(&'b R) -> Option<V>,
-    for<'b> fn(&'b mut R) -> Option<V>,
->;
+// /// Kp will force dev to create get and set while value will be owned
+// pub type KpValue<'a, R, V> = Kp<
+//     R,
+//     V,
+//     &'a R,
+//     V, // Returns owned V, not &V
+//     &'a mut R,
+//     V, // Returns owned V, not &mut V
+//     for<'b> fn(&'b R) -> Option<V>,
+//     for<'b> fn(&'b mut R) -> Option<V>,
+// >;
 
-/// Kp will force dev to create get and set while root and value both will be owned
-pub type KpOwned<R, V> = Kp<
-    R,
-    V,
-    R,
-    V, // Returns owned V, not &V
-    R,
-    V, // Returns owned V, not &mut V
-    fn(R) -> Option<V>,
-    fn(R) -> Option<V>,
->;
+// /// Kp will force dev to create get and set while root and value both will be owned
+// pub type KpOwned<R, V> = Kp<
+//     R,
+//     V,
+//     R,
+//     V, // Returns owned V, not &V
+//     R,
+//     V, // Returns owned V, not &mut V
+//     fn(R) -> Option<V>,
+//     fn(R) -> Option<V>,
+// >;
 
-/// Kp will force dev to create get and set while taking full ownership of the Root while returning Root as value.
-pub type KpRoot<R> = Kp<
-    R,
-    R,
-    R,
-    R, // Returns owned V, not &V
-    R,
-    R, // Returns owned V, not &mut V
-    fn(R) -> Option<R>,
-    fn(R) -> Option<R>,
->;
+// /// Kp will force dev to create get and set while taking full ownership of the Root while returning Root as value.
+// pub type KpRoot<R> = Kp<
+//     R,
+//     R,
+//     R,
+//     R, // Returns owned V, not &V
+//     R,
+//     R, // Returns owned V, not &mut V
+//     fn(R) -> Option<R>,
+//     fn(R) -> Option<R>,
+// >;
 
-/// Kp for void - experimental
-pub type KpVoid = Kp<(), (), (), (), (), (), fn() -> Option<()>, fn() -> Option<()>>;
+// /// Kp for void - experimental
+// pub type KpVoid = Kp<(), (), (), (), (), (), fn() -> Option<()>, fn() -> Option<()>>;
 
-pub type KpDynamic<R, V> = Kp<
-    R,
-    V,
-    &'static R,
-    &'static V,
-    &'static mut R,
-    &'static mut V,
-    Box<dyn for<'a> Fn(&'a R) -> Option<&'a V> + Send + Sync>,
-    Box<dyn for<'a> Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync>,
->;
+// pub type KpDynamic<R, V> = Kp<
+//     R,
+//     V,
+//     &'static R,
+//     &'static V,
+//     &'static mut R,
+//     &'static mut V,
+//     Box<dyn for<'a> Fn(&'a R) -> Option<&'a V> + Send + Sync>,
+//     Box<dyn for<'a> Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync>,
+// >;
 
-pub type KpBox<'a, R, V> = Kp<
-    R,
-    V,
-    &'a R,
-    &'a V,
-    &'a mut R,
-    &'a mut V,
-    Box<dyn Fn(&'a R) -> Option<&'a V> + 'a>,
-    Box<dyn Fn(&'a mut R) -> Option<&'a mut V> + 'a>,
->;
+// pub type KpBox<'a, R, V> = Kp<
+//     R,
+//     V,
+//     &'a R,
+//     &'a V,
+//     &'a mut R,
+//     &'a mut V,
+//     Box<dyn Fn(&'a R) -> Option<&'a V> + 'a>,
+//     Box<dyn Fn(&'a mut R) -> Option<&'a mut V> + 'a>,
+// >;
 
-pub type KpArc<'a, R, V> = Kp<
-    R,
-    V,
-    &'a R,
-    &'a V,
-    &'a mut R,
-    &'a mut V,
-    Arc<dyn Fn(&'a R) -> Option<&'a V> + Send + Sync + 'a>,
-    Arc<dyn Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync + 'a>,
->;
+// pub type KpArc<'a, R, V> = Kp<
+//     R,
+//     V,
+//     &'a R,
+//     &'a V,
+//     &'a mut R,
+//     &'a mut V,
+//     Arc<dyn Fn(&'a R) -> Option<&'a V> + Send + Sync + 'a>,
+//     Arc<dyn Fn(&'a mut R) -> Option<&'a mut V> + Send + Sync + 'a>,
+// >;
 
-pub type KpType<'a, R, V> = Kp<
-    R,
-    V,
-    &'a R,
-    &'a V,
-    &'a mut R,
-    &'a mut V,
-    for<'b> fn(&'b R) -> Option<&'b V>,
-    for<'b> fn(&'b mut R) -> Option<&'b mut V>,
->;
+// pub type KpType<'a, R, V> = Kp<
+//     R,
+//     V,
+//     &'a R,
+//     &'a V,
+//     &'a mut R,
+//     &'a mut V,
+//     for<'b> fn(&'b R) -> Option<&'b V>,
+//     for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+// >;
 
-pub type KpTraitType<'a, R, V> = dyn KpTrait<
-        R,
-        V,
-        &'a R,
-        &'a V,
-        &'a mut R,
-        &'a mut V,
-        for<'b> fn(&'b R) -> Option<&'b V>,
-        for<'b> fn(&'b mut R) -> Option<&'b mut V>,
-    >;
+// pub type KpTraitType<'a, R, V> = dyn KpTrait<
+//         R,
+//         V,
+//         &'a R,
+//         &'a V,
+//         &'a mut R,
+//         &'a mut V,
+//         for<'b> fn(&'b R) -> Option<&'b V>,
+//         for<'b> fn(&'b mut R) -> Option<&'b mut V>,
+//     >;
 
-/// Keypath for `Option<RefCell<T>>`: `get` returns `Option<Ref<V>>` so the caller holds the guard.
-/// Use `.get(root).as_ref().map(std::cell::Ref::deref)` to get `Option<&V>` while the `Ref` is in scope.
-pub type KpOptionRefCellType<'a, R, V> = Kp<
-    R,
-    V,
-    &'a R,
-    std::cell::Ref<'a, V>,
-    &'a mut R,
-    std::cell::RefMut<'a, V>,
-    for<'b> fn(&'b R) -> Option<std::cell::Ref<'b, V>>,
-    for<'b> fn(&'b mut R) -> Option<std::cell::RefMut<'b, V>>,
->;
+// /// Keypath for `Option<RefCell<T>>`: `get` returns `Option<Ref<V>>` so the caller holds the guard.
+// /// Use `.get(root).as_ref().map(std::cell::Ref::deref)` to get `Option<&V>` while the `Ref` is in scope.
+// pub type KpOptionRefCellType<'a, R, V> = Kp<
+//     R,
+//     V,
+//     &'a R,
+//     std::cell::Ref<'a, V>,
+//     &'a mut R,
+//     std::cell::RefMut<'a, V>,
+//     for<'b> fn(&'b R) -> Option<std::cell::Ref<'b, V>>,
+//     for<'b> fn(&'b mut R) -> Option<std::cell::RefMut<'b, V>>,
+// >;
 
-impl<'a, R, V> KpType<'a, R, V> {
-    /// Converts this keypath to [KpDynamic] for dynamic dispatch and storage (e.g. in a struct field).
-    #[inline]
-    pub fn to_dynamic(self) -> KpDynamic<R, V> {
-        self.into()
-    }
-}
+// impl<'a, R, V> KpType<'a, R, V> {
+//     /// Converts this keypath to [KpDynamic] for dynamic dispatch and storage (e.g. in a struct field).
+//     #[inline]
+//     pub fn to_dynamic(self) -> KpDynamic<R, V> {
+//         self.into()
+//     }
+// }
 
 impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V> {
     #[inline]
@@ -2073,7 +2075,18 @@ where
             move |root| first_get(root).and_then(|value| second_get(value)),
             move |root| first_set(root).and_then(|value| second_set(value)),
         )
+        
     }
+
+    // #[inline]
+    // pub fn to_dynamic(self) -> KpDynamic<R, V> {
+    //     self.into()
+    // }
+
+    pub fn identity() -> Kp<R, R, impl for<'r> Fn(&'r R) -> Option<&'r R>, impl for<'r> Fn(&'r mut R) -> Option<&'r mut R>,> {
+        Kp::new(|r| Some(r), |r| Some(r))
+    }
+
 }
 
 // impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
@@ -2114,59 +2127,34 @@ where
 //     }
 // }
 
-/// Zip two keypaths together to create a tuple
-/// Works only with KpType (reference-based keypaths)
-///
-/// # Example
-/// ```
-/// use rust_key_paths::{KpType, zip_kps};
-/// struct User { name: String, age: i32 }
-/// let user = User { name: "Akash".to_string(), age: 30 };
-/// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-/// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
-/// let zipped_fn = zip_kps(&name_kp, &age_kp);
-/// assert_eq!(zipped_fn(&user), Some((&"Akash".to_string(), &30)));
-/// ```
-pub fn zip_kps<'a, RootType, Value1, Value2>(
-    kp1: &'a KpType<'a, RootType, Value1>,
-    kp2: &'a KpType<'a, RootType, Value2>,
-) -> impl Fn(&'a RootType) -> Option<(&'a Value1, &'a Value2)> + 'a
-where
-    RootType: 'a,
-    Value1: 'a,
-    Value2: 'a,
-{
-    move |root: &'a RootType| {
-        let val1 = (kp1.get)(root)?;
-        let val2 = (kp2.get)(root)?;
-        Some((val1, val2))
-    }
-}
-
-impl<R, Root, MutRoot, G, S> Kp<R, R, Root, Root, MutRoot, MutRoot, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    G: Fn(Root) -> Option<Root>,
-    S: Fn(MutRoot) -> Option<MutRoot>,
-{
-    pub fn identity_typed() -> Kp<
-        R,
-        R,
-        Root,
-        Root,
-        MutRoot,
-        MutRoot,
-        fn(Root) -> Option<Root>,
-        fn(MutRoot) -> Option<MutRoot>,
-    > {
-        Kp::new(|r: Root| Some(r), |r: MutRoot| Some(r))
-    }
-
-    pub fn identity<'a>() -> KpType<'a, R, R> {
-        KpType::new(|r| Some(r), |r| Some(r))
-    }
-}
+// /// Zip two keypaths together to create a tuple
+// /// Works only with KpType (reference-based keypaths)
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::{KpType, zip_kps};
+// /// struct User { name: String, age: i32 }
+// /// let user = User { name: "Akash".to_string(), age: 30 };
+// /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
+// /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
+// /// let zipped_fn = zip_kps(&name_kp, &age_kp);
+// /// assert_eq!(zipped_fn(&user), Some((&"Akash".to_string(), &30)));
+// /// ```
+// pub fn zip_kps<'a, RootType, Value1, Value2>(
+//     kp1: &'a KpType<'a, RootType, Value1>,
+//     kp2: &'a KpType<'a, RootType, Value2>,
+// ) -> impl Fn(&'a RootType) -> Option<(&'a Value1, &'a Value2)> + 'a
+// where
+//     RootType: 'a,
+//     Value1: 'a,
+//     Value2: 'a,
+// {
+//     move |root: &'a RootType| {
+//         let val1 = (kp1.get)(root)?;
+//         let val2 = (kp2.get)(root)?;
+//         Some((val1, val2))
+//     }
+// }
 
 // ========== ENUM KEYPATHS ==========
 

@@ -265,3 +265,8 @@ Static keypath (chain built once, reused) matches or beats direct lock for sync 
 ## 📜 License
 
 * Mozilla Public License 2.0
+
+Todos 
+1. pub fn zip_kps
+2. pub fn to_dynamic
+3. KpType
