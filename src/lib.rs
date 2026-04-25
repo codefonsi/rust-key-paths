@@ -2207,51 +2207,47 @@ where
 // {
 // }
 
-impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
-    EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+impl<Enum, Variant, G, S, E>
+    EnumKp<Enum, Variant, G, S, E>
 where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
+    S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
     E: Fn(Variant) -> Enum,
 {
     /// Create a new EnumKp with extractor and embedder functions
     pub fn new(
-        extractor: Kp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S>,
-        embedder: E,
+        ex: Kp<Enum, Variant, G, S>,
+        em: E,
     ) -> Self {
         Self {
-            extractor,
-            embedder,
+            ex,
+            em,
         }
     }
 
     /// Extract the variant from an enum (returns None if wrong variant)
-    pub fn get(&self, enum_value: Root) -> Option<Value> {
-        (self.extractor.get)(enum_value)
+    pub fn get<'r>(&self, enum_value: &'r Enum) -> Option<&'r Variant> {
+        (self.ex.get)(enum_value)
     }
 
     /// Extract the variant mutably from an enum (returns None if wrong variant)
-    pub fn get_mut(&self, enum_value: MutRoot) -> Option<MutValue> {
-        (self.extractor.set)(enum_value)
+    pub fn set<'r>(&self, enum_value: &'r mut Enum) -> Option<&'r mut Variant> {
+        (self.ex.set)(enum_value)
     }
 
     /// Embed a value into the enum variant
     pub fn embed(&self, value: Variant) -> Enum {
-        (self.embedder)(value)
+        (self.em)(value)
     }
 
     /// Get the underlying Kp for composition with other keypaths
-    pub fn as_kp(&self) -> &Kp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S> {
-        &self.extractor
+    pub fn as_kp(&self) -> &Kp<Enum, Variant, G, S> {
+        &self.ex
     }
 
     /// Convert to Kp (loses embedding capability but gains composition)
-    pub fn into_kp(self) -> Kp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S> {
-        self.extractor
+    pub fn into_kp(self) -> Kp<Enum, Variant, G, S> {
+        self.ex
     }
 
     /// Map the variant value through a transformation function
