@@ -1417,6 +1417,26 @@ where
         move |root: &R| self.get(root).map(&mapper)
     }
 
+    /// Filters values using a predicate and returns a new keypath.
+    fn filter<F>(
+        &self,
+        predicate: F,
+    ) -> Kp<
+        R,
+        V,
+        impl for<'r> Fn(&'r R) -> Option<&'r V> + '_,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut V> + '_,
+    >
+    where
+        F: Fn(&V) -> bool + Clone + 'static,
+    {
+        let predicate_for_get = predicate.clone();
+        Kp::new(
+            move |root: &R| self.get(root).filter(|value| predicate_for_get(value)),
+            move |root: &mut R| self.set(root).filter(|value| predicate(value)),
+        )
+    }
+
     /// Maps and flattens the keypath value when mapper returns `Option`.
     fn filter_map<MappedValue, F>(
         &self,
