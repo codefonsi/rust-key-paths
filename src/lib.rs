@@ -1863,193 +1863,85 @@ where
 //     }
 // }
 
-// // Type alias for the common case with references
-// pub type EnumKpType<'a, Enum, Variant> = EnumKp<
-//     Enum,
-//     Variant,
-//     &'a Enum,
-//     &'a Variant,
-//     &'a mut Enum,
-//     &'a mut Variant,
-//     for<'b> fn(&'b Enum) -> Option<&'b Variant>,
-//     for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
-//     fn(Variant) -> Enum,
-// >;
+// Type alias for the common case with references.
+pub type EnumKpType<'a, Enum, Variant> = EnumKp<
+    Enum,
+    Variant,
+    for<'b> fn(&'b Enum) -> Option<&'b Variant>,
+    for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
+    fn(Variant) -> Enum,
+>;
 
-// // Static factory functions for creating EnumKp instances
-// /// Create an enum keypath with both extraction and embedding for a specific variant
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::enum_variant;
-// /// enum MyEnum {
-// ///     A(String),
-// ///     B(i32),
-// /// }
-// ///
-// /// let kp = enum_variant(
-// ///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-// ///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-// ///     |s: String| MyEnum::A(s)
-// /// );
-// /// ```
-// pub fn enum_variant<'a, Enum, Variant>(
-//     get: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
-//     set: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
-//     embedder: fn(Variant) -> Enum,
-// ) -> EnumKpType<'a, Enum, Variant> {
-//     EnumKp::new(Kp::new(get, set), embedder)
-// }
+/// Create an enum keypath with both extraction and embedding for a specific variant.
+pub fn enum_variant<'a, Enum, Variant>(
+    get: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
+    set: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
+    embedder: fn(Variant) -> Enum,
+) -> EnumKpType<'a, Enum, Variant> {
+    EnumKp::new(Kp::new(get, set), embedder)
+}
 
-// /// Extract from Result<T, E> - Ok variant
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::enum_ok;
-// /// let result: Result<String, i32> = Ok("success".to_string());
-// /// let ok_kp = enum_ok();
-// /// assert_eq!(ok_kp.get(&result), Some(&"success".to_string()));
-// /// ```
-// pub fn enum_ok<'a, T, E>() -> EnumKpType<'a, Result<T, E>, T> {
-//     EnumKp::new(
-//         Kp::new(
-//             |r: &Result<T, E>| r.as_ref().ok(),
-//             |r: &mut Result<T, E>| r.as_mut().ok(),
-//         ),
-//         |t: T| Ok(t),
-//     )
-// }
+/// Extract from Result<T, E> - Ok variant.
+pub fn enum_ok<'a, T, E>() -> EnumKpType<'a, Result<T, E>, T> {
+    EnumKp::new(
+        Kp::new(
+            |r: &Result<T, E>| r.as_ref().ok(),
+            |r: &mut Result<T, E>| r.as_mut().ok(),
+        ),
+        |t: T| Ok(t),
+    )
+}
 
-// /// Extract from Result<T, E> - Err variant
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::enum_err;
-// /// let result: Result<String, i32> = Err(42);
-// /// let err_kp = enum_err();
-// /// assert_eq!(err_kp.get(&result), Some(&42));
-// /// ```
-// pub fn enum_err<'a, T, E>() -> EnumKpType<'a, Result<T, E>, E> {
-//     EnumKp::new(
-//         Kp::new(
-//             |r: &Result<T, E>| r.as_ref().err(),
-//             |r: &mut Result<T, E>| r.as_mut().err(),
-//         ),
-//         |e: E| Err(e),
-//     )
-// }
+/// Extract from Result<T, E> - Err variant.
+pub fn enum_err<'a, T, E>() -> EnumKpType<'a, Result<T, E>, E> {
+    EnumKp::new(
+        Kp::new(
+            |r: &Result<T, E>| r.as_ref().err(),
+            |r: &mut Result<T, E>| r.as_mut().err(),
+        ),
+        |e: E| Err(e),
+    )
+}
 
-// /// Extract from Option<T> - Some variant
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::enum_some;
-// /// let opt = Some("value".to_string());
-// /// let some_kp = enum_some();
-// /// assert_eq!(some_kp.get(&opt), Some(&"value".to_string()));
-// /// ```
-// pub fn enum_some<'a, T>() -> EnumKpType<'a, Option<T>, T> {
-//     EnumKp::new(
-//         Kp::new(|o: &Option<T>| o.as_ref(), |o: &mut Option<T>| o.as_mut()),
-//         |t: T| Some(t),
-//     )
-// }
+/// Extract from Option<T> - Some variant.
+pub fn enum_some<'a, T>() -> EnumKpType<'a, Option<T>, T> {
+    EnumKp::new(
+        Kp::new(|o: &Option<T>| o.as_ref(), |o: &mut Option<T>| o.as_mut()),
+        |t: T| Some(t),
+    )
+}
 
-// // Helper functions for creating enum keypaths with type inference
-// /// Create an enum keypath for a specific variant with type inference
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::variant_of;
-// /// enum MyEnum {
-// ///     A(String),
-// ///     B(i32),
-// /// }
-// ///
-// /// let kp_a = variant_of(
-// ///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-// ///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-// ///     |s: String| MyEnum::A(s)
-// /// );
-// /// ```
-// pub fn variant_of<Enum, Variant, G, S>(
-//     ex_get: G,
-//     ex_set: S,
-//     embedder: fn(Variant) -> Enum,
-// ) -> EnumKpType<Enum, Variant> where
-//     G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
-//     S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
-//  {
-//     enum_variant(getter, setter, embedder)
-// }
+/// Create an enum keypath for a specific variant with type inference.
+pub fn variant_of<'a, Enum, Variant>(
+    ex_get: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
+    ex_set: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
+    embedder: fn(Variant) -> Enum,
+) -> EnumKpType<'a, Enum, Variant> {
+    enum_variant(ex_get, ex_set, embedder)
+}
 
-// // ========== CONTAINER KEYPATHS ==========
+// ========== CONTAINER KEYPATHS ==========
 
-// // Helper functions for working with standard containers (Box, Arc, Rc)
-// /// Create a keypath for unwrapping Box<T> -> T
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::kp_box;
-// /// let boxed = Box::new("value".to_string());
-// /// let kp = kp_box();
-// /// assert_eq!(kp.get(&boxed), Some(&"value".to_string()));
-// /// ```
-// pub fn kp_box<'a, T>() -> KpType<'a, Box<T>, T> {
-//     Kp::new(
-//         |b: &Box<T>| Some(b.as_ref()),
-//         |b: &mut Box<T>| Some(b.as_mut()),
-//     )
-// }
+/// Create a keypath for unwrapping Box<T> -> T.
+pub fn kp_box<'a, T>() -> KpType<'a, Box<T>, T> {
+    Kp::new(
+        |b: &Box<T>| Some(b.as_ref()),
+        |b: &mut Box<T>| Some(b.as_mut()),
+    )
+}
 
-// /// Create a keypath for unwrapping Arc<T> -> T (read-only)
-// ///
-// /// # Example
-// /// ```
-// /// use std::sync::Arc;
-// /// use rust_key_paths::kp_arc;
-// /// let arc = Arc::new("value".to_string());
-// /// let kp = kp_arc();
-// /// assert_eq!(kp.get(&arc), Some(&"value".to_string()));
-// /// ```
-// pub fn kp_arc<'a, T>() -> Kp<
-//     Arc<T>,
-//     T,
-//     &'a Arc<T>,
-//     &'a T,
-//     &'a mut Arc<T>,
-//     &'a mut T,
-//     for<'b> fn(&'b Arc<T>) -> Option<&'b T>,
-//     for<'b> fn(&'b mut Arc<T>) -> Option<&'b mut T>,
-// > {
-//     Kp::new(
-//         |arc: &Arc<T>| Some(arc.as_ref()),
-//         |arc: &mut Arc<T>| Arc::get_mut(arc),
-//     )
-// }
+/// Create a keypath for unwrapping Arc<T> -> T.
+pub fn kp_arc<'a, T>() -> KpType<'a, std::sync::Arc<T>, T> {
+    Kp::new(
+        |arc: &std::sync::Arc<T>| Some(arc.as_ref()),
+        |arc: &mut std::sync::Arc<T>| std::sync::Arc::get_mut(arc),
+    )
+}
 
-// /// Create a keypath for unwrapping Rc<T> -> T (read-only)
-// ///
-// /// # Example
-// /// ```
-// /// use std::rc::Rc;
-// /// use rust_key_paths::kp_rc;
-// /// let rc = Rc::new("value".to_string());
-// /// let kp = kp_rc();
-// /// assert_eq!(kp.get(&rc), Some(&"value".to_string()));
-// /// ```
-// pub fn kp_rc<'a, T>() -> Kp<
-//     std::rc::Rc<T>,
-//     T,
-//     &'a std::rc::Rc<T>,
-//     &'a T,
-//     &'a mut std::rc::Rc<T>,
-//     &'a mut T,
-//     for<'b> fn(&'b std::rc::Rc<T>) -> Option<&'b T>,
-//     for<'b> fn(&'b mut std::rc::Rc<T>) -> Option<&'b mut T>,
-// > {
-//     Kp::new(
-//         |rc: &std::rc::Rc<T>| Some(rc.as_ref()),
-//         |rc: &mut std::rc::Rc<T>| std::rc::Rc::get_mut(rc),
-//     )
-// }
+/// Create a keypath for unwrapping Rc<T> -> T.
+pub fn kp_rc<'a, T>() -> KpType<'a, std::rc::Rc<T>, T> {
+    Kp::new(
+        |rc: &std::rc::Rc<T>| Some(rc.as_ref()),
+        |rc: &mut std::rc::Rc<T>| std::rc::Rc::get_mut(rc),
+    )
+}

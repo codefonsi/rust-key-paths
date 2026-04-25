@@ -267,13 +267,13 @@ Static keypath (chain built once, reused) matches or beats direct lock for sync 
 * Mozilla Public License 2.0
 
 Todos 
-1. pub fn zip_kps
+1. pub fn zip_kps - Done
 2. pub fn to_dynamic, - Done
 2. impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>, - Done
 2. pub fn into_dynamic(self) -> KpDynamic<R, V> - Done
 2. pub fn from_closures - Done
 3. KpType, KpDynamic, - Done
-3. pub type KpComposed<R, V> = Kp<
+3. pub type KpComposed<R, V> - Done
 4. lock
 5. async_lock
 6. pin
