@@ -1409,392 +1409,145 @@ where
     G: for<'r> Fn(&'r R) -> Option<&'r V>,
     S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
 {
-    // /// Map the value through a transformation function
-    // /// Returns a new keypath that transforms the value when accessed
-    // ///
-    // /// # Example
-    // /// ```
-    // /// use rust_key_paths::{Kp, KpType};
-    // /// struct User { name: String }
-    // /// let user = User { name: "Akash".to_string() };
-    // /// let name_kp = KpType::new(|u: &User| Some(&u.name), |u: &mut User| Some(&mut u.name));
-    // /// let len_kp = name_kp.map(|name: &String| name.len());
-    // /// assert_eq!(len_kp.get(&user), Some(5));
-    // /// ```
-    // fn map<MappedValue, F>(
-    //     &self,
-    //     mapper: F,
-    // ) -> Kp<
-    //     R,
-    //     MappedValue,
-    //     Root,
-    //     MappedValue,
-    //     MutRoot,
-    //     MappedValue,
-    //     impl Fn(Root) -> Option<MappedValue>,
-    //     impl Fn(MutRoot) -> Option<MappedValue>,
-    // >
-    // where
-    //     // Copy: Required because mapper is used in both getter and setter closures
-    //     // 'static: Required because the returned Kp must own its closures
-    //     F: Fn(&V) -> MappedValue + Copy + 'static,
-    //     V: 'static,
-    //     MappedValue: 'static,
-    // {
-    //     Kp::new(
-    //         move |root: Root| {
-    //             &self.get(root).map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 mapper(v)
-    //             })
-    //         },
-    //         move |root: MutRoot| {
-    //             &self.get_mut(root).map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 mapper(v)
-    //             })
-    //         },
-    //     )
-    // }
+    /// Maps the keypath value into an owned transformed value.
+    fn map<MappedValue, F>(&self, mapper: F) -> impl for<'r> Fn(&'r R) -> Option<MappedValue> + '_
+    where
+        F: Fn(&V) -> MappedValue + 'static,
+    {
+        move |root: &R| self.get(root).map(&mapper)
+    }
 
-    // /// Map the value through a transformation function.
-    // fn map<MappedValue, F>(
-    //     &self,
-    //     mapper: F,
-    // ) -> Kp<
-    //     R,
-    //     MappedValue,
-    //     impl for<'r> Fn(&'r R) -> Option<&'r MappedValue>,
-    //     impl for<'r> Fn(&'r mut R) -> Option<&'r mut MappedValue>,
-    // >
-    // where
-    //     F: Fn(&V) -> &MappedValue,
-    // {
-    //     Kp::new(
-    //         move |root: &R| {
-    //             self.get(root).map(|v: &V| {
-    //                 mapper(v)
-    //             })
-    //         },
-    //         move |root: &mut R| {
-    //             self.set(root).map(|v: &mut V| {
-    //                 mapper(v)
-    //             })
-    //         },
-    //     )
-    // }
+    /// Maps and flattens the keypath value when mapper returns `Option`.
+    fn filter_map<MappedValue, F>(
+        &self,
+        mapper: F,
+    ) -> impl for<'r> Fn(&'r R) -> Option<MappedValue> + '_
+    where
+        F: Fn(&V) -> Option<MappedValue> + 'static,
+    {
+        move |root: &R| self.get(root).and_then(&mapper)
+    }
 
-    // /// Filter the value based on a predicate.
-    // fn filter<F>(
-    //     &self,
-    //     predicate: F,
-    // ) -> Kp<
-    //     R,
-    //     V,
-    //     impl for<'r> Fn(&'r R) -> Option<&'r V>,
-    //     impl for<'r> Fn(&'r mut R) -> Option<&'r V>,
-    // >
-    // where
-    //     F: Fn(&V) -> bool + Copy + 'static,
-    // {
-    //     Kp::new(
-    //          move |root: &R| {
-    //             self.get(root).filter(|value| {
-    //                 predicate(value)
-    //             })
-    //         },
-    //          move |root: &mut R| {
-    //             self.set(root).filter(|value| {
-    //                 predicate(value)
-    //             })
-    //         },
-    //     )
-    // }
+    /// Runs `inspector` for side effects and returns the original value.
+    fn inspect<F>(&self, inspector: F) -> impl for<'r> Fn(&'r R) -> Option<&'r V> + '_
+    where
+        F: Fn(&V) + 'static,
+    {
+        move |root: &R| {
+            self.get(root).inspect(|value| {
+                inspector(value);
+            })
+        }
+    }
 
-    // /// Map and flatten when mapper returns an Option.
-    // fn filter_map<MappedValue, F>(
-    //     &self,
-    //     mapper: F,
-    // ) -> Kp<
-    //     R,
-    //     MappedValue,
-    //     Root,
-    //     MappedValue,
-    //     MutRoot,
-    //     MappedValue,
-    //     impl Fn(Root) -> Option<MappedValue> + '_,
-    //     impl Fn(MutRoot) -> Option<MappedValue> + '_,
-    // >
-    // where
-    //     F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-    // {
-    //     Kp::new(
-    //         move |root: Root| {
-    //             self.get(root).and_then(|value| {
-    //                 let v: &V = value.borrow();
-    //                 mapper(v)
-    //             })
-    //         },
-    //         move |root: MutRoot| {
-    //             self.get_mut(root).and_then(|value| {
-    //                 let v: &V = value.borrow();
-    //                 mapper(v)
-    //             })
-    //         },
-    //     )
-    // }
+    /// Flat map - maps to an iterator and flattens.
+    fn flat_map<I, Item, F>(&self, mapper: F) -> impl for<'r> Fn(&'r R) -> Vec<Item> + '_
+    where
+        F: Fn(&V) -> I + 'static,
+        I: IntoIterator<Item = Item>,
+    {
+        move |root: &R| {
+            self.get(root)
+                .map(|value| mapper(value).into_iter().collect())
+                .unwrap_or_else(Vec::new)
+        }
+    }
 
-    // /// Apply a function for its side effects and return the value.
-    // fn inspect<F>(
-    //     &self,
-    //     inspector: F,
-    // ) -> Kp<
-    //     R,
-    //     V,
-    //     Root,
-    //     Value,
-    //     MutRoot,
-    //     MutValue,
-    //     impl Fn(Root) -> Option<Value> + '_,
-    //     impl Fn(MutRoot) -> Option<MutValue> + '_,
-    // >
-    // where
-    //     F: Fn(&V) + Copy + 'static,
-    // {
-    //     Kp::new(
-    //         move |root: Root| {
-    //             self.get(root).map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 inspector(v);
-    //                 value
-    //             })
-    //         },
-    //         move |root: MutRoot| {
-    //             self.get_mut(root).map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 inspector(v);
-    //                 value
-    //             })
-    //         },
-    //     )
-    // }
+    /// Fold/reduce the value using an accumulator function.
+    fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl for<'r> Fn(&'r R) -> Acc + '_
+    where
+        F: Fn(Acc, &V) -> Acc + 'static,
+        Acc: Copy + 'static,
+    {
+        move |root: &R| {
+            self.get(root)
+                .map(|value| folder(init, value))
+                .unwrap_or(init)
+        }
+    }
 
-    // /// Flat map - maps to an iterator and flattens.
-    // fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
-    // where
-    //     F: Fn(&V) -> I + 'static,
-    //     I: IntoIterator<Item = Item>,
-    // {
-    //     move |root: Root| {
-    //         self.get(root)
-    //             .map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 mapper(v).into_iter().collect()
-    //             })
-    //             .unwrap_or_else(Vec::new)
-    //     }
-    // }
+    /// Check if the value satisfies a predicate.
+    fn any<F>(&self, predicate: F) -> impl for<'r> Fn(&'r R) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+    {
+        move |root: &R| self.get(root).map(&predicate).unwrap_or(false)
+    }
 
-    // /// Fold/reduce the value using an accumulator function.
-    // fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
-    // where
-    //     F: Fn(Acc, &V) -> Acc + 'static,
-    //     Acc: Copy + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root)
-    //             .map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 folder(init, v)
-    //             })
-    //             .unwrap_or(init)
-    //     }
-    // }
+    /// Check if the value satisfies a predicate; returns true for missing values.
+    fn all<F>(&self, predicate: F) -> impl for<'r> Fn(&'r R) -> bool + '_
+    where
+        F: Fn(&V) -> bool + 'static,
+    {
+        move |root: &R| self.get(root).map(&predicate).unwrap_or(true)
+    }
 
-    // /// Check if any element satisfies a predicate.
-    // fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
-    // where
-    //     F: Fn(&V) -> bool + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root)
-    //             .map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 predicate(v)
-    //             })
-    //             .unwrap_or(false)
-    //     }
-    // }
+    /// Count elements in a collection-like value.
+    fn count_items<F>(&self, counter: F) -> impl for<'r> Fn(&'r R) -> Option<usize> + '_
+    where
+        F: Fn(&V) -> usize + 'static,
+    {
+        move |root: &R| self.get(root).map(&counter)
+    }
 
-    // /// Check if all elements satisfy a predicate.
-    // fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
-    // where
-    //     F: Fn(&V) -> bool + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root)
-    //             .map(|value| {
-    //                 let v: &V = value.borrow();
-    //                 predicate(v)
-    //             })
-    //             .unwrap_or(true)
-    //     }
-    // }
+    /// Find an item in a collection-like value.
+    fn find_in<Item, F>(&self, finder: F) -> impl for<'r> Fn(&'r R) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+    {
+        move |root: &R| self.get(root).and_then(&finder)
+    }
 
-    // /// Count elements in a collection value.
-    // fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
-    // where
-    //     F: Fn(&V) -> usize + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).map(|value| {
-    //             let v: &V = value.borrow();
-    //             counter(v)
-    //         })
-    //     }
-    // }
+    /// Take first N elements from a collection-like value.
+    fn take<Output, F>(&self, n: usize, taker: F) -> impl for<'r> Fn(&'r R) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+    {
+        move |root: &R| self.get(root).map(|value| taker(value, n))
+    }
 
-    // /// Find first element matching predicate in a collection value.
-    // fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
-    // where
-    //     F: Fn(&V) -> Option<Item> + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).and_then(|value| {
-    //             let v: &V = value.borrow();
-    //             finder(v)
-    //         })
-    //     }
-    // }
+    /// Skip first N elements from a collection-like value.
+    fn skip<Output, F>(&self, n: usize, skipper: F) -> impl for<'r> Fn(&'r R) -> Option<Output> + '_
+    where
+        F: Fn(&V, usize) -> Output + 'static,
+    {
+        move |root: &R| self.get(root).map(|value| skipper(value, n))
+    }
 
-    // /// Take first N elements from a collection value.
-    // fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
-    // where
-    //     F: Fn(&V, usize) -> Output + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).map(|value| {
-    //             let v: &V = value.borrow();
-    //             taker(v, n)
-    //         })
-    //     }
-    // }
+    /// Partition a collection-like value into two groups.
+    fn partition_value<Output, F>(
+        &self,
+        partitioner: F,
+    ) -> impl for<'r> Fn(&'r R) -> Option<Output> + '_
+    where
+        F: Fn(&V) -> Output + 'static,
+    {
+        move |root: &R| self.get(root).map(&partitioner)
+    }
 
-    // /// Skip first N elements from a collection value.
-    // fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
-    // where
-    //     F: Fn(&V, usize) -> Output + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).map(|value| {
-    //             let v: &V = value.borrow();
-    //             skipper(v, n)
-    //         })
-    //     }
-    // }
+    /// Get min value from a collection-like value.
+    fn min_value<Item, F>(&self, min_fn: F) -> impl for<'r> Fn(&'r R) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+    {
+        move |root: &R| self.get(root).and_then(&min_fn)
+    }
 
-    // /// Partition a collection value into two groups based on predicate.
-    // fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
-    // where
-    //     F: Fn(&V) -> Output + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).map(|value| {
-    //             let v: &V = value.borrow();
-    //             partitioner(v)
-    //         })
-    //     }
-    // }
+    /// Get max value from a collection-like value.
+    fn max_value<Item, F>(&self, max_fn: F) -> impl for<'r> Fn(&'r R) -> Option<Item> + '_
+    where
+        F: Fn(&V) -> Option<Item> + 'static,
+    {
+        move |root: &R| self.get(root).and_then(&max_fn)
+    }
 
-    // /// Get min value from a collection.
-    // fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
-    // where
-    //     F: Fn(&V) -> Option<Item> + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).and_then(|value| {
-    //             let v: &V = value.borrow();
-    //             min_fn(v)
-    //         })
-    //     }
-    // }
-
-    // /// Get max value from a collection.
-    // fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
-    // where
-    //     F: Fn(&V) -> Option<Item> + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).and_then(|value| {
-    //             let v: &V = value.borrow();
-    //             max_fn(v)
-    //         })
-    //     }
-    // }
-
-    // /// Sum numeric values in a collection.
-    // fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
-    // where
-    //     F: Fn(&V) -> Sum + 'static,
-    // {
-    //     move |root: Root| {
-    //         self.get(root).map(|value| {
-    //             let v: &V = value.borrow();
-    //             sum_fn(v)
-    //         })
-    //     }
-    // }
-
-    // /// Zip two keypaths on the same root; get_mut returns None.
-    // fn zip<V2, Value2, MutValue2, G2, S2>(
-    //     self,
-    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-    // ) -> Kp<
-    //     R,
-    //     (Value, Value2),
-    //     Root,
-    //     (Value, Value2),
-    //     MutRoot,
-    //     (Value, Value2),
-    //     impl Fn(Root) -> Option<(Value, Value2)>,
-    //     impl Fn(MutRoot) -> Option<(Value, Value2)>,
-    // >
-    // where
-    //     Root: Copy,
-    //     Value2: std::borrow::Borrow<V2>,
-    //     MutValue2: std::borrow::BorrowMut<V2>,
-    //     G2: Fn(Root) -> Option<Value2>,
-    //     S2: Fn(MutRoot) -> Option<MutValue2>,
-    //     V2: 'static {
-    //         todo!()
-    //     }
-
-    // /// Zip two keypaths and transform the pair with a function; get_mut returns None.
-    // fn zip_with<V2, Value2, MutValue2, Z, G2, S2, F>(
-    //     &self,
-    //     other: Kp<R, V2, Root, Value2, MutRoot, MutValue2, G2, S2>,
-    //     transform: F,
-    // ) -> Kp<
-    //     R,
-    //     Z,
-    //     Root,
-    //     Z,
-    //     MutRoot,
-    //     Z,
-    //     impl Fn(Root) -> Option<Z>,
-    //     impl Fn(MutRoot) -> Option<Z>,
-    // >
-    // where
-    //     Root: Copy,
-    //     Value2: std::borrow::Borrow<V2>,
-    //     MutValue2: std::borrow::BorrowMut<V2>,
-    //     G2: Fn(Root) -> Option<Value2>,
-    //     S2: Fn(MutRoot) -> Option<MutValue2>,
-    //     F: Fn(Value, Value2) -> Z + Copy + 'static,
-    //     V2: 'static,
-    //     Z: 'static {
-    //         todo!()
-    //     }
+    /// Sum values from a collection-like value.
+    fn sum_value<Sum, F>(&self, sum_fn: F) -> impl for<'r> Fn(&'r R) -> Option<Sum> + '_
+    where
+        F: Fn(&V) -> Sum + 'static,
+    {
+        move |root: &R| self.get(root).map(&sum_fn)
+    }
 }
 
 impl<R, V, G, S> KPWritable<R, V> for Kp<R, V, G, S>
@@ -1956,18 +1709,12 @@ where
 //     }
 // }
 
-// impl<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-// where
-//     Root: std::borrow::Borrow<R>,
-//     Value: std::borrow::Borrow<V>,
-//     MutRoot: std::borrow::BorrowMut<R>,
-//     MutValue: std::borrow::BorrowMut<V>,
-//     G: Fn(Root) -> Option<Value>,
-//     S: Fn(MutRoot) -> Option<MutValue>,
-// {
-// }
+impl<R, V, G, S> HofTrait<R, V, G, S> for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+{
+}
 
 // impl<R, V, Root, Value, MutRoot, MutValue, G, S>
 //     AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -2207,22 +1954,15 @@ where
 // {
 // }
 
-impl<Enum, Variant, G, S, E>
-    EnumKp<Enum, Variant, G, S, E>
+impl<Enum, Variant, G, S, E> EnumKp<Enum, Variant, G, S, E>
 where
     G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
     S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
     E: Fn(Variant) -> Enum,
 {
     /// Create a new EnumKp with extractor and embedder functions
-    pub fn new(
-        ex: Kp<Enum, Variant, G, S>,
-        em: E,
-    ) -> Self {
-        Self {
-            ex,
-            em,
-        }
+    pub fn new(ex: Kp<Enum, Variant, G, S>, em: E) -> Self {
+        Self { ex, em }
     }
 
     /// Extract the variant from an enum (returns None if wrong variant)
@@ -2484,7 +2224,7 @@ where
 //     ex_get: G,
 //     ex_set: S,
 //     embedder: fn(Variant) -> Enum,
-// ) -> EnumKpType<Enum, Variant> where 
+// ) -> EnumKpType<Enum, Variant> where
 //     G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
 //     S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
 //  {
