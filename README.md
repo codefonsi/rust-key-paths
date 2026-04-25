@@ -283,6 +283,7 @@ Todos
 10. pub trait AccessorTrait - Done
 11. pub trait CoercionTrait - Done
 12. pub trait HofTrait - fn map - Done
-13. Helper functions + enum_variant
-14. Send + Sync for Kp and EnumKP
-15. HOF enumkp
+13. Helper functions + enum_variant - Done
+14. Send + Sync for Kp and EnumKP - X
+15. HOF enumkp - X
+16. Trait seprated and moved to new file - Done

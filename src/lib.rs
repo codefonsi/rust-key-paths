@@ -19,6 +19,7 @@ pub mod prelude;
 pub mod kptrait;
 pub use kptrait::{
     AccessorTrait, CoercionTrait, HofTrait, KPWritable, KeyPathValueTarget, KpReadable, KpTrait,
+    LockAccess,
 };
 
 // pub use lock::{

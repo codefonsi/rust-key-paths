@@ -310,3 +310,14 @@ where
         move |root: &R| self.get(root).map(&sum_fn)
     }
 }
+
+/// Lock adapter abstraction used by sync lock keypaths.
+pub trait LockAccess<Lock, Mid> {
+    fn with_read<Rv, F>(&self, lock: &Lock, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&Mid) -> Option<Rv>;
+
+    fn with_write<Rv, F>(&self, lock: &Lock, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&mut Mid) -> Option<Rv>;
+}

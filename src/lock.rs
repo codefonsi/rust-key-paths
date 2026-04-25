@@ -1,3 +1,157 @@
+use crate::{KPWritable, Kp, KpReadable, KpType, LockAccess};
+use std::marker::PhantomData;
+use std::sync::{Arc, Mutex, RwLock};
+
+/// Sync lock keypath adapter in modern `Kp` style.
+#[derive(Clone)]
+pub struct LockKp<R, Lock, Mid, V, G1, S1, L, G2, S2>
+where
+    G1: for<'r> Fn(&'r R) -> Option<&'r Lock>,
+    S1: for<'r> Fn(&'r mut R) -> Option<&'r mut Lock>,
+    G2: for<'r> Fn(&'r Mid) -> Option<&'r V>,
+    S2: for<'r> Fn(&'r mut Mid) -> Option<&'r mut V>,
+    L: LockAccess<Lock, Mid> + Clone,
+{
+    pub(crate) prev: Kp<R, Lock, G1, S1>,
+    pub(crate) mid: L,
+    pub(crate) next: Kp<Mid, V, G2, S2>,
+}
+
+impl<R, Lock, Mid, V, G1, S1, L, G2, S2> LockKp<R, Lock, Mid, V, G1, S1, L, G2, S2>
+where
+    G1: for<'r> Fn(&'r R) -> Option<&'r Lock>,
+    S1: for<'r> Fn(&'r mut R) -> Option<&'r mut Lock>,
+    G2: for<'r> Fn(&'r Mid) -> Option<&'r V>,
+    S2: for<'r> Fn(&'r mut Mid) -> Option<&'r mut V>,
+    L: LockAccess<Lock, Mid> + Clone,
+{
+    pub fn new(prev: Kp<R, Lock, G1, S1>, mid: L, next: Kp<Mid, V, G2, S2>) -> Self {
+        Self { prev, mid, next }
+    }
+
+    /// Read through the lock and clone the final value.
+    pub fn get(&self, root: &R) -> Option<V>
+    where
+        V: Clone,
+    {
+        let lock = (self.prev.get)(root)?;
+        self.mid
+            .with_read(lock, |m| self.next.get(m).cloned())
+    }
+
+    /// Mutate through the lock and return cloned final value.
+    pub fn get_mut(&self, root: &mut R) -> Option<V>
+    where
+        V: Clone,
+    {
+        let lock = (self.prev.set)(root)?;
+        self.mid
+            .with_write(lock, |m| self.next.get(m).cloned())
+    }
+
+    /// Update the terminal value through the lock.
+    pub fn update<F>(&self, root: &mut R, updater: F) -> bool
+    where
+        F: FnOnce(&mut V),
+    {
+        let Some(lock) = (self.prev.set)(root) else {
+            return false;
+        };
+        self.mid
+            .with_write(lock, |m| {
+                let target = self.next.set(m)?;
+                updater(target);
+                Some(())
+            })
+            .is_some()
+    }
+}
+
+/// Accessor for `Arc<Mutex<T>>`.
+#[derive(Clone, Default)]
+pub struct ArcMutexAccess<T>(PhantomData<T>);
+impl<T> ArcMutexAccess<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+impl<T> LockAccess<Arc<Mutex<T>>, T> for ArcMutexAccess<T> {
+    fn with_read<Rv, F>(&self, lock: &Arc<Mutex<T>>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&T) -> Option<Rv>,
+    {
+        let guard = lock.lock().ok()?;
+        f(&guard)
+    }
+
+    fn with_write<Rv, F>(&self, lock: &Arc<Mutex<T>>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&mut T) -> Option<Rv>,
+    {
+        let mut guard = lock.lock().ok()?;
+        f(&mut guard)
+    }
+}
+
+/// Accessor for `std::sync::RwLock<T>`.
+#[derive(Clone, Default)]
+pub struct StdRwLockAccess<T>(PhantomData<T>);
+impl<T> StdRwLockAccess<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+impl<T> LockAccess<RwLock<T>, T> for StdRwLockAccess<T> {
+    fn with_read<Rv, F>(&self, lock: &RwLock<T>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&T) -> Option<Rv>,
+    {
+        let guard = lock.read().ok()?;
+        f(&guard)
+    }
+
+    fn with_write<Rv, F>(&self, lock: &RwLock<T>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&mut T) -> Option<Rv>,
+    {
+        let mut guard = lock.write().ok()?;
+        f(&mut guard)
+    }
+}
+
+#[cfg(feature = "parking_lot")]
+/// Accessor for `Arc<parking_lot::Mutex<T>>`.
+#[derive(Clone, Default)]
+pub struct ParkingLotMutexAccess<T>(PhantomData<T>);
+#[cfg(feature = "parking_lot")]
+impl<T> ParkingLotMutexAccess<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+#[cfg(feature = "parking_lot")]
+impl<T> LockAccess<Arc<parking_lot::Mutex<T>>, T> for ParkingLotMutexAccess<T> {
+    fn with_read<Rv, F>(&self, lock: &Arc<parking_lot::Mutex<T>>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&T) -> Option<Rv>,
+    {
+        let guard = lock.lock();
+        f(&guard)
+    }
+
+    fn with_write<Rv, F>(&self, lock: &Arc<parking_lot::Mutex<T>>, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&mut T) -> Option<Rv>,
+    {
+        let mut guard = lock.lock();
+        f(&mut guard)
+    }
+}
+
+/// Helper for lock-contained identity keypath.
+pub fn lock_identity<T>() -> KpType<'static, T, T> {
+    Kp::new(|v: &T| Some(v), |v: &mut T| Some(v))
+}
 // //! # Lock Keypath Module
 // //!
 // //! This module provides `LockKp` for safely navigating through locked/synchronized data structures.
