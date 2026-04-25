@@ -31,11 +31,18 @@ pub mod prelude;
 // Export the async_lock module
 pub mod async_lock;
 
-type KpDynamic<R, V> = Kp<
+pub type KpType<'a, R, V> = Kp<
     R,
     V,
-    dyn for<'r> Fn(&'r R) -> Option<&'r V>,
-    dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+    for<'r> fn(&'r R) -> Option<&'r V>,
+    for<'r> fn(&'r mut R) -> Option<&'r mut V>,
+>;
+
+pub type KpDynamic<R, V> = Kp<
+    R,
+    V,
+    Box<dyn for<'r> Fn(&'r R) -> Option<&'r V> + Send + Sync>,
+    Box<dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Send + Sync>,
 >;
 
 // pub struct KpStatic<R, V> {
