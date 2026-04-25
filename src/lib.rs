@@ -1812,7 +1812,7 @@ where
 ///
 /// When mutating through a Kp, the **setter path** is used—`get_mut` invokes the `set` closure,
 /// not the `get` closure. The getter is for read-only access only.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Kp<R, V, G, S>
 where
     G: for<'r> Fn(&'r R) -> Option<&'r V>,
@@ -1823,6 +1823,27 @@ where
     /// Setter closure: used by [Kp::get_mut] for mutation.
     pub set: S,
     _p: std::marker::PhantomData<(R, V)>,
+}
+
+impl<R, V, G, S> Clone for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V> + Clone,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            get: self.get.clone(),
+            set: self.set.clone(),
+            _p: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<R, V, G, S> Copy for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V> + Copy,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Copy,
+{
 }
 
 impl<R, V, G, S> Kp<R, V, G, S>
