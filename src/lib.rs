@@ -2014,19 +2014,16 @@ where
 /// When mutating through a Kp, the **setter path** is used—`get_mut` invokes the `set` closure,
 /// not the `get` closure. The getter is for read-only access only.
 #[derive(Clone)]
-pub struct Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+pub struct Kp<R, V, G, S>
 where
-    Root: std::borrow::Borrow<R>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
 {
     /// Getter closure: used by [Kp::get] for read-only access.
     pub get: G,
     /// Setter closure: used by [Kp::get_mut] for mutation.
     pub set: S,
-    _p: std::marker::PhantomData<(R, V, Root, Value, MutRoot, MutValue)>,
+    _p: std::marker::PhantomData<(R, V)>,
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
