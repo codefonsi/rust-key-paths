@@ -2250,247 +2250,246 @@ where
         self.ex
     }
 
-    /// Map the variant value through a transformation function
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::enum_ok;
-    /// let result: Result<String, i32> = Ok("hello".to_string());
-    /// let ok_kp = enum_ok();
-    /// let len_kp = ok_kp.map(|s: &String| s.len());
-    /// assert_eq!(len_kp.get(&result), Some(5));
-    /// ```
-    pub fn map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> EnumKp<
-        Enum,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue>,
-        impl Fn(MutRoot) -> Option<MappedValue>,
-        impl Fn(MappedValue) -> Enum,
-    >
-    where
-        // Copy: Required because mapper is used via extractor.map() which needs it
-        // 'static: Required because the returned EnumKp must own its closures
-        F: Fn(&Variant) -> MappedValue + Copy + 'static,
-        Variant: 'static,
-        MappedValue: 'static,
-        // Copy: Required for embedder to be captured in the panic closure
-        E: Fn(Variant) -> Enum + Copy + 'static,
-    {
-        let mapped_extractor = self.extractor.map(mapper);
+    // /// Map the variant value through a transformation function
+    // ///
+    // /// # Example
+    // /// ```
+    // /// use rust_key_paths::enum_ok;
+    // /// let result: Result<String, i32> = Ok("hello".to_string());
+    // /// let ok_kp = enum_ok();
+    // /// let len_kp = ok_kp.map(|s: &String| s.len());
+    // /// assert_eq!(len_kp.get(&result), Some(5));
+    // /// ```
+    // pub fn map<MappedValue, F>(
+    //     &self,
+    //     mapper: F,
+    // ) -> EnumKp<
+    //     Enum,
+    //     MappedValue,
+    //     impl for<'r> Fn(&'r Enum) -> Option<&'r MappedValue>,
+    //     impl for<'r> Fn(&'r mut Enum) -> Option<&'r mut MappedValue>,
+    //     impl for<'r> Fn(MappedValue) -> Enum,
+    // >
+    // where
+    //     // Copy: Required because mapper is used via extractor.map() which needs it
+    //     // 'static: Required because the returned EnumKp must own its closures
+    //     F: Fn(&Variant) -> MappedValue + Copy + 'static,
+    //     Variant: 'static,
+    //     MappedValue: 'static,
+    //     // Copy: Required for embedder to be captured in the panic closure
+    //     E: Fn(Variant) -> Enum + Copy + 'static,
+    // {
+    //     let mapped_extractor = self.ex.map(mapper);
 
-        // Create a new embedder that maps back
-        // Note: This is a limitation - we can't reverse the map for embedding
-        // So we create a placeholder that panics
-        let new_embedder = move |_value: MappedValue| -> Enum {
-            panic!(
-                "Cannot embed mapped values back into enum. Use the original EnumKp for embedding."
-            )
-        };
+    //     // Create a new embedder that maps back
+    //     // Note: This is a limitation - we can't reverse the map for embedding
+    //     // So we create a placeholder that panics
+    //     let new_embedder = move |_value: MappedValue| -> Enum {
+    //         panic!(
+    //             "Cannot embed mapped values back into enum. Use the original EnumKp for embedding."
+    //         )
+    //     };
 
-        EnumKp::new(mapped_extractor, new_embedder)
-    }
+    //     EnumKp::new(mapped_extractor, new_embedder)
+    // }
 
-    /// Filter the variant value based on a predicate
-    /// Returns None if the predicate fails or if wrong variant
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::enum_ok;
-    /// let result: Result<i32, String> = Ok(42);
-    /// let ok_kp = enum_ok();
-    /// let positive_kp = ok_kp.filter(|x: &i32| *x > 0);
-    /// assert_eq!(positive_kp.get(&result), Some(&42));
-    /// ```
-    pub fn filter<F>(
-        &self,
-        predicate: F,
-    ) -> EnumKp<
-        Enum,
-        Variant,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value>,
-        impl Fn(MutRoot) -> Option<MutValue>,
-        E,
-    >
-    where
-        // Copy: Required because predicate is used via extractor.filter() which needs it
-        // 'static: Required because the returned EnumKp must own its closures
-        F: Fn(&Variant) -> bool + Copy + 'static,
-        Variant: 'static,
-        // Copy: Required to clone embedder into the new EnumKp
-        E: Copy,
-    {
-        let filtered_extractor = self.extractor.filter(predicate);
-        EnumKp::new(filtered_extractor, self.embedder)
-    }
+    // /// Filter the variant value based on a predicate
+    // /// Returns None if the predicate fails or if wrong variant
+    // ///
+    // /// # Example
+    // /// ```
+    // /// use rust_key_paths::enum_ok;
+    // /// let result: Result<i32, String> = Ok(42);
+    // /// let ok_kp = enum_ok();
+    // /// let positive_kp = ok_kp.filter(|x: &i32| *x > 0);
+    // /// assert_eq!(positive_kp.get(&result), Some(&42));
+    // /// ```
+    // pub fn filter<F>(
+    //     &self,
+    //     predicate: F,
+    // ) -> EnumKp<
+    //     Enum,
+    //     Variant,
+    //     Root,
+    //     Value,
+    //     MutRoot,
+    //     MutValue,
+    //     impl Fn(Root) -> Option<Value>,
+    //     impl Fn(MutRoot) -> Option<MutValue>,
+    //     E,
+    // >
+    // where
+    //     // Copy: Required because predicate is used via extractor.filter() which needs it
+    //     // 'static: Required because the returned EnumKp must own its closures
+    //     F: Fn(&Variant) -> bool + Copy + 'static,
+    //     Variant: 'static,
+    //     // Copy: Required to clone embedder into the new EnumKp
+    //     E: Copy,
+    // {
+    //     let filtered_extractor = self.extractor.filter(predicate);
+    //     EnumKp::new(filtered_extractor, self.embedder)
+    // }
 }
 
-impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Debug
-    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
-where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-    E: Fn(Variant) -> Enum,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EnumKp")
-            .field("enum_ty", &std::any::type_name::<Enum>())
-            .field("variant_ty", &std::any::type_name::<Variant>())
-            .finish_non_exhaustive()
-    }
-}
+// impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Debug
+//     for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+// where
+//     Root: std::borrow::Borrow<Enum>,
+//     Value: std::borrow::Borrow<Variant>,
+//     MutRoot: std::borrow::BorrowMut<Enum>,
+//     MutValue: std::borrow::BorrowMut<Variant>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+//     E: Fn(Variant) -> Enum,
+// {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("EnumKp")
+//             .field("enum_ty", &std::any::type_name::<Enum>())
+//             .field("variant_ty", &std::any::type_name::<Variant>())
+//             .finish_non_exhaustive()
+//     }
+// }
 
-impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Display
-    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
-where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-    E: Fn(Variant) -> Enum,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "EnumKp<{}, {}>",
-            std::any::type_name::<Enum>(),
-            std::any::type_name::<Variant>()
-        )
-    }
-}
+// impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> fmt::Display
+//     for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+// where
+//     Root: std::borrow::Borrow<Enum>,
+//     Value: std::borrow::Borrow<Variant>,
+//     MutRoot: std::borrow::BorrowMut<Enum>,
+//     MutValue: std::borrow::BorrowMut<Variant>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+//     E: Fn(Variant) -> Enum,
+// {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(
+//             f,
+//             "EnumKp<{}, {}>",
+//             std::any::type_name::<Enum>(),
+//             std::any::type_name::<Variant>()
+//         )
+//     }
+// }
 
-// Type alias for the common case with references
-pub type EnumKpType<'a, Enum, Variant> = EnumKp<
-    Enum,
-    Variant,
-    &'a Enum,
-    &'a Variant,
-    &'a mut Enum,
-    &'a mut Variant,
-    for<'b> fn(&'b Enum) -> Option<&'b Variant>,
-    for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
-    fn(Variant) -> Enum,
->;
+// // Type alias for the common case with references
+// pub type EnumKpType<'a, Enum, Variant> = EnumKp<
+//     Enum,
+//     Variant,
+//     &'a Enum,
+//     &'a Variant,
+//     &'a mut Enum,
+//     &'a mut Variant,
+//     for<'b> fn(&'b Enum) -> Option<&'b Variant>,
+//     for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
+//     fn(Variant) -> Enum,
+// >;
 
-// Static factory functions for creating EnumKp instances
-/// Create an enum keypath with both extraction and embedding for a specific variant
-///
-/// # Example
-/// ```
-/// use rust_key_paths::enum_variant;
-/// enum MyEnum {
-///     A(String),
-///     B(i32),
-/// }
-///
-/// let kp = enum_variant(
-///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-///     |s: String| MyEnum::A(s)
-/// );
-/// ```
-pub fn enum_variant<'a, Enum, Variant>(
-    getter: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
-    setter: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
-    embedder: fn(Variant) -> Enum,
-) -> EnumKpType<'a, Enum, Variant> {
-    EnumKp::new(Kp::new(getter, setter), embedder)
-}
+// // Static factory functions for creating EnumKp instances
+// /// Create an enum keypath with both extraction and embedding for a specific variant
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::enum_variant;
+// /// enum MyEnum {
+// ///     A(String),
+// ///     B(i32),
+// /// }
+// ///
+// /// let kp = enum_variant(
+// ///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
+// ///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
+// ///     |s: String| MyEnum::A(s)
+// /// );
+// /// ```
+// pub fn enum_variant<'a, Enum, Variant>(
+//     get: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
+//     set: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
+//     embedder: fn(Variant) -> Enum,
+// ) -> EnumKpType<'a, Enum, Variant> {
+//     EnumKp::new(Kp::new(get, set), embedder)
+// }
 
-/// Extract from Result<T, E> - Ok variant
-///
-/// # Example
-/// ```
-/// use rust_key_paths::enum_ok;
-/// let result: Result<String, i32> = Ok("success".to_string());
-/// let ok_kp = enum_ok();
-/// assert_eq!(ok_kp.get(&result), Some(&"success".to_string()));
-/// ```
-pub fn enum_ok<'a, T, E>() -> EnumKpType<'a, Result<T, E>, T> {
-    EnumKp::new(
-        Kp::new(
-            |r: &Result<T, E>| r.as_ref().ok(),
-            |r: &mut Result<T, E>| r.as_mut().ok(),
-        ),
-        |t: T| Ok(t),
-    )
-}
+// /// Extract from Result<T, E> - Ok variant
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::enum_ok;
+// /// let result: Result<String, i32> = Ok("success".to_string());
+// /// let ok_kp = enum_ok();
+// /// assert_eq!(ok_kp.get(&result), Some(&"success".to_string()));
+// /// ```
+// pub fn enum_ok<'a, T, E>() -> EnumKpType<'a, Result<T, E>, T> {
+//     EnumKp::new(
+//         Kp::new(
+//             |r: &Result<T, E>| r.as_ref().ok(),
+//             |r: &mut Result<T, E>| r.as_mut().ok(),
+//         ),
+//         |t: T| Ok(t),
+//     )
+// }
 
-/// Extract from Result<T, E> - Err variant
-///
-/// # Example
-/// ```
-/// use rust_key_paths::enum_err;
-/// let result: Result<String, i32> = Err(42);
-/// let err_kp = enum_err();
-/// assert_eq!(err_kp.get(&result), Some(&42));
-/// ```
-pub fn enum_err<'a, T, E>() -> EnumKpType<'a, Result<T, E>, E> {
-    EnumKp::new(
-        Kp::new(
-            |r: &Result<T, E>| r.as_ref().err(),
-            |r: &mut Result<T, E>| r.as_mut().err(),
-        ),
-        |e: E| Err(e),
-    )
-}
+// /// Extract from Result<T, E> - Err variant
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::enum_err;
+// /// let result: Result<String, i32> = Err(42);
+// /// let err_kp = enum_err();
+// /// assert_eq!(err_kp.get(&result), Some(&42));
+// /// ```
+// pub fn enum_err<'a, T, E>() -> EnumKpType<'a, Result<T, E>, E> {
+//     EnumKp::new(
+//         Kp::new(
+//             |r: &Result<T, E>| r.as_ref().err(),
+//             |r: &mut Result<T, E>| r.as_mut().err(),
+//         ),
+//         |e: E| Err(e),
+//     )
+// }
 
-/// Extract from Option<T> - Some variant
-///
-/// # Example
-/// ```
-/// use rust_key_paths::enum_some;
-/// let opt = Some("value".to_string());
-/// let some_kp = enum_some();
-/// assert_eq!(some_kp.get(&opt), Some(&"value".to_string()));
-/// ```
-pub fn enum_some<'a, T>() -> EnumKpType<'a, Option<T>, T> {
-    EnumKp::new(
-        Kp::new(|o: &Option<T>| o.as_ref(), |o: &mut Option<T>| o.as_mut()),
-        |t: T| Some(t),
-    )
-}
+// /// Extract from Option<T> - Some variant
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::enum_some;
+// /// let opt = Some("value".to_string());
+// /// let some_kp = enum_some();
+// /// assert_eq!(some_kp.get(&opt), Some(&"value".to_string()));
+// /// ```
+// pub fn enum_some<'a, T>() -> EnumKpType<'a, Option<T>, T> {
+//     EnumKp::new(
+//         Kp::new(|o: &Option<T>| o.as_ref(), |o: &mut Option<T>| o.as_mut()),
+//         |t: T| Some(t),
+//     )
+// }
 
-// Helper functions for creating enum keypaths with type inference
-/// Create an enum keypath for a specific variant with type inference
-///
-/// # Example
-/// ```
-/// use rust_key_paths::variant_of;
-/// enum MyEnum {
-///     A(String),
-///     B(i32),
-/// }
-///
-/// let kp_a = variant_of(
-///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
-///     |s: String| MyEnum::A(s)
-/// );
-/// ```
-pub fn variant_of<'a, Enum, Variant>(
-    getter: for<'b> fn(&'b Enum) -> Option<&'b Variant>,
-    setter: for<'b> fn(&'b mut Enum) -> Option<&'b mut Variant>,
-    embedder: fn(Variant) -> Enum,
-) -> EnumKpType<'a, Enum, Variant> {
-    enum_variant(getter, setter, embedder)
-}
+// // Helper functions for creating enum keypaths with type inference
+// /// Create an enum keypath for a specific variant with type inference
+// ///
+// /// # Example
+// /// ```
+// /// use rust_key_paths::variant_of;
+// /// enum MyEnum {
+// ///     A(String),
+// ///     B(i32),
+// /// }
+// ///
+// /// let kp_a = variant_of(
+// ///     |e: &MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
+// ///     |e: &mut MyEnum| match e { MyEnum::A(s) => Some(s), _ => None },
+// ///     |s: String| MyEnum::A(s)
+// /// );
+// /// ```
+// pub fn variant_of<Enum, Variant, G, S>(
+//     ex_get: G,
+//     ex_set: S,
+//     embedder: fn(Variant) -> Enum,
+// ) -> EnumKpType<Enum, Variant> where 
+//     G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
+//     S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
+//  {
+//     enum_variant(getter, setter, embedder)
+// }
 
 // // ========== CONTAINER KEYPATHS ==========
 
