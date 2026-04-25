@@ -1647,34 +1647,23 @@ where
 //     }
 // }
 
-// /// Zip two keypaths together to create a tuple
-// /// Works only with KpType (reference-based keypaths)
-// ///
-// /// # Example
-// /// ```
-// /// use rust_key_paths::{KpType, zip_kps};
-// /// struct User { name: String, age: i32 }
-// /// let user = User { name: "Akash".to_string(), age: 30 };
-// /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-// /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
-// /// let zipped_fn = zip_kps(&name_kp, &age_kp);
-// /// assert_eq!(zipped_fn(&user), Some((&"Akash".to_string(), &30)));
-// /// ```
-// pub fn zip_kps<'a, RootType, Value1, Value2>(
-//     kp1: &'a KpType<'a, RootType, Value1>,
-//     kp2: &'a KpType<'a, RootType, Value2>,
-// ) -> impl Fn(&'a RootType) -> Option<(&'a Value1, &'a Value2)> + 'a
-// where
-//     RootType: 'a,
-//     Value1: 'a,
-//     Value2: 'a,
-// {
-//     move |root: &'a RootType| {
-//         let val1 = (kp1.get)(root)?;
-//         let val2 = (kp2.get)(root)?;
-//         Some((val1, val2))
-//     }
-// }
+/// Zip two keypaths together to create a tuple.
+/// Works with `KpType` (fn-pointer/zero-sized keypaths).
+pub fn zip_kps<'a, RootType, Value1, Value2>(
+    kp1: &'a KpType<'a, RootType, Value1>,
+    kp2: &'a KpType<'a, RootType, Value2>,
+) -> impl Fn(&'a RootType) -> Option<(&'a Value1, &'a Value2)> + 'a
+where
+    RootType: 'a,
+    Value1: 'a,
+    Value2: 'a,
+{
+    move |root: &'a RootType| {
+        let val1 = (kp1.get)(root)?;
+        let val2 = (kp2.get)(root)?;
+        Some((val1, val2))
+    }
+}
 
 // ========== ENUM KEYPATHS ==========
 
