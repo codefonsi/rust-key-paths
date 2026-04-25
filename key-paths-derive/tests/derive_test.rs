@@ -175,7 +175,10 @@ fn option_hash_map_at_returns_value_ref() {
         map: Some(HashMap::from([("k".to_string(), 42)])),
         set: Some(HashSet::from(["x".to_string()])),
     };
-    assert_eq!(WithOptionalCollections::map_at("k".to_string()).get(&s), Some(&42));
+    assert_eq!(
+        WithOptionalCollections::map_at("k".to_string()).get(&s),
+        Some(&42)
+    );
 
     let mut s = s;
     WithOptionalCollections::map_at("k".to_string())

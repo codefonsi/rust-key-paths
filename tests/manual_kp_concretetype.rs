@@ -1,4 +1,4 @@
-use rust_key_paths::{Kp};
+use rust_key_paths::Kp;
 
 #[derive(Debug)]
 struct Size {
@@ -23,10 +23,7 @@ fn rect_size_kp() -> Kp<
     for<'a> fn(&'a Rectangle) -> Option<&'a Size>,
     for<'a> fn(&'a mut Rectangle) -> Option<&'a mut Size>,
 > {
-    Kp::new(
-        |x| { Some(& x.size) },
-        |x| { Some(&mut x.size) }
-    )
+    Kp::new(|x| Some(&x.size), |x| Some(&mut x.size))
 }
 
 // Manual keypath: Size -> width
@@ -40,10 +37,7 @@ fn size_width_kp() -> Kp<
     for<'a> fn(&'a Size) -> Option<&'a u32>,
     for<'a> fn(&'a mut Size) -> Option<&'a mut u32>,
 > {
-    Kp::new(
-        |x| { Some(& x.height) },
-        |x| { Some(&mut x.height) }
-    )
+    Kp::new(|x| Some(&x.height), |x| Some(&mut x.height))
 }
 
 #[test]

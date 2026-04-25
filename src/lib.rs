@@ -31,7 +31,12 @@ pub mod prelude;
 // Export the async_lock module
 pub mod async_lock;
 
-type KpDynamic<R, V> = Kp<R, V, dyn for<'r> Fn(&'r R) -> Option<&'r V>, dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V>>;
+type KpDynamic<R, V> = Kp<
+    R,
+    V,
+    dyn for<'r> Fn(&'r R) -> Option<&'r V>,
+    dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+>;
 
 // pub struct KpStatic<R, V> {
 //     pub get: fn(&R) -> Option<&V>,
@@ -1015,7 +1020,7 @@ pub trait KpTrait<R, V>: KpReadable<R, V> + KPWritable<R, V> {
     where
         G2: for<'r> Fn(&'r V) -> Option<&'r SV>,
         S2: for<'r> Fn(&'r mut V) -> Option<&'r mut SV>,
-        for<'r> V:  'r;
+        for<'r> V: 'r;
 }
 
 pub trait KpReadable<R, V> {
@@ -1399,8 +1404,7 @@ pub trait KPWritable<R, V> {
 //     fn into_get(self) -> impl Fn(Root) -> Option<Value>;
 // }
 
-pub trait HofTrait<R, V, G, S>:
-    KpTrait<R, V>
+pub trait HofTrait<R, V, G, S>: KpTrait<R, V>
 where
     G: for<'r> Fn(&'r R) -> Option<&'r V>,
     S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
@@ -1795,34 +1799,45 @@ where
     //     }
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+impl<R, V, G, S> KPWritable<R, V> for Kp<R, V, G, S>
 where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
 {
-    fn then<SV, SubValue, MutSubValue, G2, S2>(
+    fn set<'a>(&self, root: &'a mut R) -> Option<&'a mut V> {
+        (self.set)(root)
+    }
+}
+
+impl<R, V, G, S> KpReadable<R, V> for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+{
+    fn get<'a>(&self, root: &'a R) -> Option<&'a V> {
+        (self.get)(root)
+    }
+}
+
+impl<R, V, G, S> KpTrait<R, V> for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+{
+    #[inline]
+    fn then<SV, G2, S2>(
         self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+        next: Kp<V, SV, G2, S2>,
     ) -> Kp<
         R,
         SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
+        impl for<'r> Fn(&'r R) -> Option<&'r SV>,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut SV>,
     >
     where
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,
+        G2: for<'r> Fn(&'r V) -> Option<&'r SV>,
+        S2: for<'r> Fn(&'r mut V) -> Option<&'r mut SV>,
+        for<'r> V: 'r,
     {
         let first_get = self.get;
         let first_set = self.set;
@@ -1830,18 +1845,32 @@ where
         let second_set = next.set;
 
         Kp::new(
-            move |root: Root| first_get(root).and_then(|value| second_get(value)),
-            move |root: MutRoot| first_set(root).and_then(|value| second_set(value)),
+            move |root| first_get(root).and_then(|value| second_get(value)),
+            move |root| first_set(root).and_then(|value| second_set(value)),
         )
     }
 
-    fn get(&self, root: Root) -> Option<Value> {
-        (self.get)(root)
+    fn type_id_of_root() -> TypeId
+    where
+        R: 'static,
+    {
+        std::any::TypeId::of::<R>()
     }
 
-    fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
-        (self.set)(root)
+    fn type_id_of_value() -> TypeId
+    where
+        V: 'static,
+    {
+        std::any::TypeId::of::<V>()
     }
+
+    // fn get(&self, root: Root) -> Option<Value> {
+    //     (self.get)(root)
+    // }
+
+    // fn get_mut(&self, root: MutRoot) -> Option<MutValue> {
+    //     (self.set)(root)
+    // }
 }
 
 impl<R, V, Root, Value, MutRoot, MutValue, G, S>
@@ -2044,7 +2073,7 @@ where
     where
         G2: for<'r> Fn(&'r V) -> Option<&'r SV>,
         S2: for<'r> Fn(&'r mut V) -> Option<&'r mut SV>,
-        for<'r> V:  'r
+        for<'r> V: 'r,
     {
         let first_get = self.get;
         let first_set = self.set;
@@ -2055,7 +2084,6 @@ where
             move |root| first_get(root).and_then(|value| second_get(value)),
             move |root| first_set(root).and_then(|value| second_set(value)),
         )
-        
     }
 
     // #[inline]
@@ -2063,10 +2091,14 @@ where
     //     self.into()
     // }
 
-    pub fn identity() -> Kp<R, R, impl for<'r> Fn(&'r R) -> Option<&'r R>, impl for<'r> Fn(&'r mut R) -> Option<&'r mut R>,> {
+    pub fn identity() -> Kp<
+        R,
+        R,
+        impl for<'r> Fn(&'r R) -> Option<&'r R>,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut R>,
+    > {
         Kp::new(|r| Some(r), |r| Some(r))
     }
-
 }
 
 // impl<R, V, Root, Value, MutRoot, MutValue, G, S> fmt::Debug
