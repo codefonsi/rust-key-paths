@@ -828,232 +828,98 @@ impl<T> KeyPathValueTarget for &mut T {
 //     }
 // }
 
-// pub struct PKp<Root> {
-//     getter: Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn Any>>,
-//     value_type_id: TypeId,
-//     _phantom: std::marker::PhantomData<Root>,
-// }
+pub struct PKp<Root> {
+    getter: std::rc::Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn std::any::Any>>,
+    value_type_id: std::any::TypeId,
+    _phantom: std::marker::PhantomData<Root>,
+}
 
-// impl<Root> PKp<Root>
-// where
-//     Root: 'static,
-// {
-//     /// Create a new PKp from a KpType (the common reference-based keypath)
-//     pub fn new<'a, V>(keypath: KpType<'a, Root, V>) -> Self
-//     where
-//         V: Any + 'static,
-//     {
-//         let value_type_id = TypeId::of::<V>();
-//         let getter_fn = keypath.get;
+impl<Root> PKp<Root>
+where
+    Root: 'static,
+{
+    /// Create a new PKp from a KpType.
+    pub fn new<'a, V>(keypath: KpType<'a, Root, V>) -> Self
+    where
+        V: std::any::Any + 'static,
+    {
+        let value_type_id = std::any::TypeId::of::<V>();
+        let getter_fn = keypath.get;
 
-//         Self {
-//             getter: Rc::new(move |root: &Root| getter_fn(root).map(|val: &V| val as &dyn Any)),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
+        Self {
+            getter: std::rc::Rc::new(move |root: &Root| getter_fn(root).map(|val: &V| val as &dyn std::any::Any)),
+            value_type_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
 
-//     /// Create a PKp from a KpType (alias for `new()`)
-//     pub fn from<'a, V>(keypath: KpType<'a, Root, V>) -> Self
-//     where
-//         V: Any + 'static,
-//     {
-//         Self::new(keypath)
-//     }
+    pub fn from<'a, V>(keypath: KpType<'a, Root, V>) -> Self
+    where
+        V: std::any::Any + 'static,
+    {
+        Self::new(keypath)
+    }
 
-//     /// Get the value as a trait object
-//     pub fn get<'r>(&self, root: &'r Root) -> Option<&'r dyn Any> {
-//         (self.getter)(root)
-//     }
+    pub fn get<'r>(&self, root: &'r Root) -> Option<&'r dyn std::any::Any> {
+        (self.getter)(root)
+    }
 
-//     /// Get the TypeId of the Value type
-//     pub fn value_type_id(&self) -> TypeId {
-//         self.value_type_id
-//     }
+    pub fn value_type_id(&self) -> std::any::TypeId {
+        self.value_type_id
+    }
 
-//     /// Try to downcast the result to a specific type
-//     pub fn get_as<'a, Value: Any>(&self, root: &'a Root) -> Option<&'a Value> {
-//         if self.value_type_id == TypeId::of::<Value>() {
-//             self.get(root).and_then(|any| any.downcast_ref::<Value>())
-//         } else {
-//             None
-//         }
-//     }
+    pub fn get_as<'a, Value: std::any::Any>(&self, root: &'a Root) -> Option<&'a Value> {
+        if self.value_type_id == std::any::TypeId::of::<Value>() {
+            self.get(root).and_then(|any| any.downcast_ref::<Value>())
+        } else {
+            None
+        }
+    }
 
-//     /// Get a human-readable name for the value type
-//     pub fn kind_name(&self) -> String {
-//         format!("{:?}", self.value_type_id)
-//     }
+    pub fn kind_name(&self) -> String {
+        format!("{:?}", self.value_type_id)
+    }
 
-//     /// Adapt this keypath to work with Arc<Root> instead of Root
-//     pub fn for_arc(&self) -> PKp<Arc<Root>> {
-//         let getter = self.getter.clone();
-//         let value_type_id = self.value_type_id;
+    pub fn for_arc(&self) -> PKp<std::sync::Arc<Root>> {
+        let getter = self.getter.clone();
+        let value_type_id = self.value_type_id;
+        PKp {
+            getter: std::rc::Rc::new(move |arc: &std::sync::Arc<Root>| getter(arc.as_ref())),
+            value_type_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
 
-//         PKp {
-//             getter: Rc::new(move |arc: &Arc<Root>| getter(arc.as_ref())),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
+    pub fn for_box(&self) -> PKp<Box<Root>> {
+        let getter = self.getter.clone();
+        let value_type_id = self.value_type_id;
+        PKp {
+            getter: std::rc::Rc::new(move |boxed: &Box<Root>| getter(boxed.as_ref())),
+            value_type_id,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
 
-//     /// Adapt this keypath to work with Box<Root> instead of Root
-//     pub fn for_box(&self) -> PKp<Box<Root>> {
-//         let getter = self.getter.clone();
-//         let value_type_id = self.value_type_id;
+impl<Root> fmt::Debug for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PKp")
+            .field("root_ty", &std::any::type_name::<Root>())
+            .field("value_type_id", &self.value_type_id)
+            .finish_non_exhaustive()
+    }
+}
 
-//         PKp {
-//             getter: Rc::new(move |boxed: &Box<Root>| getter(boxed.as_ref())),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Adapt this keypath to work with Rc<Root> instead of Root
-//     pub fn for_rc(&self) -> PKp<Rc<Root>> {
-//         let getter = self.getter.clone();
-//         let value_type_id = self.value_type_id;
-
-//         PKp {
-//             getter: Rc::new(move |rc: &Rc<Root>| getter(rc.as_ref())),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Adapt this keypath to work with Option<Root> instead of Root
-//     pub fn for_option(&self) -> PKp<Option<Root>> {
-//         let getter = self.getter.clone();
-//         let value_type_id = self.value_type_id;
-
-//         PKp {
-//             getter: Rc::new(move |opt: &Option<Root>| opt.as_ref().and_then(|root| getter(root))),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Adapt this keypath to work with Result<Root, E> instead of Root
-//     pub fn for_result<E>(&self) -> PKp<Result<Root, E>>
-//     where
-//         E: 'static,
-//     {
-//         let getter = self.getter.clone();
-//         let value_type_id = self.value_type_id;
-
-//         PKp {
-//             getter: Rc::new(move |result: &Result<Root, E>| {
-//                 result.as_ref().ok().and_then(|root| getter(root))
-//             }),
-//             value_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Map the value through a transformation function
-//     /// The mapped value must also implement Any for type erasure
-//     ///
-//     /// # Example
-//     /// ```
-//     /// use rust_key_paths::{Kp, KpType, PKp};
-//     /// struct User { name: String }
-//     /// let user = User { name: "Akash".to_string() };
-//     /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-//     /// let name_pkp = PKp::new(name_kp);
-//     /// let len_pkp = name_pkp.map::<String, _, _>(|s| s.len());
-//     /// assert_eq!(len_pkp.get_as::<usize>(&user), Some(&5));
-//     /// ```
-//     pub fn map<OrigValue, MappedValue, F>(&self, mapper: F) -> PKp<Root>
-//     where
-//         OrigValue: Any + 'static,
-//         MappedValue: Any + 'static,
-//         F: Fn(&OrigValue) -> MappedValue + 'static,
-//     {
-//         let orig_type_id = self.value_type_id;
-//         let getter = self.getter.clone();
-//         let mapped_type_id = TypeId::of::<MappedValue>();
-
-//         PKp {
-//             getter: Rc::new(move |root: &Root| {
-//                 getter(root).and_then(|any_value| {
-//                     // Verify the original type matches
-//                     if orig_type_id == TypeId::of::<OrigValue>() {
-//                         any_value.downcast_ref::<OrigValue>().map(|orig_val| {
-//                             let mapped = mapper(orig_val);
-//                             // Box the mapped value and return as &dyn Any
-//                             // Note: This creates a new allocation
-//                             Box::leak(Box::new(mapped)) as &dyn Any
-//                         })
-//                     } else {
-//                         None
-//                     }
-//                 })
-//             }),
-//             value_type_id: mapped_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-
-//     /// Filter the value based on a predicate with type checking
-//     /// Returns None if the type doesn't match or predicate fails
-//     ///
-//     /// # Example
-//     /// ```
-//     /// use rust_key_paths::{Kp, KpType, PKp};
-//     /// struct User { age: i32 }
-//     /// let user = User { age: 30 };
-//     /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
-//     /// let age_pkp = PKp::new(age_kp);
-//     /// let adult_pkp = age_pkp.filter::<i32, _>(|age| *age >= 18);
-//     /// assert_eq!(adult_pkp.get_as::<i32>(&user), Some(&30));
-//     /// ```
-//     pub fn filter<Value, F>(&self, predicate: F) -> PKp<Root>
-//     where
-//         Value: Any + 'static,
-//         F: Fn(&Value) -> bool + 'static,
-//     {
-//         let orig_type_id = self.value_type_id;
-//         let getter = self.getter.clone();
-
-//         PKp {
-//             getter: Rc::new(move |root: &Root| {
-//                 getter(root).filter(|any_value| {
-//                     // Type check and apply predicate
-//                     if orig_type_id == TypeId::of::<Value>() {
-//                         any_value
-//                             .downcast_ref::<Value>()
-//                             .map(|val| predicate(val))
-//                             .unwrap_or(false)
-//                     } else {
-//                         false
-//                     }
-//                 })
-//             }),
-//             value_type_id: orig_type_id,
-//             _phantom: std::marker::PhantomData,
-//         }
-//     }
-// }
-
-// impl<Root> fmt::Debug for PKp<Root> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         f.debug_struct("PKp")
-//             .field("root_ty", &std::any::type_name::<Root>())
-//             .field("value_type_id", &self.value_type_id)
-//             .finish_non_exhaustive()
-//     }
-// }
-
-// impl<Root> fmt::Display for PKp<Root> {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(
-//             f,
-//             "PKp<{}, value_type_id={:?}>",
-//             std::any::type_name::<Root>(),
-//             self.value_type_id
-//         )
-//     }
-// }
+impl<Root> fmt::Display for PKp<Root> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PKp<{}, value_type_id={:?}>",
+            std::any::type_name::<Root>(),
+            self.value_type_id
+        )
+    }
+}
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
 pub trait KpTrait<R, V>: KpReadable<R, V> + KPWritable<R, V> {
