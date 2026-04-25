@@ -2174,45 +2174,38 @@ where
 /// This struct serves dual purposes:
 /// 1. As a concrete keypath instance for extracting and embedding enum variants
 /// 2. As a namespace for static factory methods: `EnumKp::for_ok()`, `EnumKp::for_some()`, etc.
-pub struct EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+pub struct EnumKp<Enum, Variant, G, S, E>
 where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
+    S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
     E: Fn(Variant) -> Enum,
 {
-    extractor: Kp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S>,
-    embedder: E,
+    ex: Kp<Enum, Variant, G, S>,
+    em: E,
 }
 
 // EnumKp is a functional component; Send/Sync follow from extractor and embedder.
-unsafe impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> Send
-    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
-where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value> + Send,
-    S: Fn(MutRoot) -> Option<MutValue> + Send,
-    E: Fn(Variant) -> Enum + Send,
-{
-}
-unsafe impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> Sync
-    for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
-where
-    Root: std::borrow::Borrow<Enum>,
-    Value: std::borrow::Borrow<Variant>,
-    MutRoot: std::borrow::BorrowMut<Enum>,
-    MutValue: std::borrow::BorrowMut<Variant>,
-    G: Fn(Root) -> Option<Value> + Sync,
-    S: Fn(MutRoot) -> Option<MutValue> + Sync,
-    E: Fn(Variant) -> Enum + Sync,
-{
-}
+// unsafe impl<Enum, Variant, G, S, E> Send
+//     for EnumKp<Enum, Variant, G, S, E>
+// where
+//     G: for<'r> Fn(&'r Enum) -> Option<&'r Variant>,
+//     S: for<'r> Fn(&'r mut Enum) -> Option<&'r mut Variant>,
+//     E: Fn(Variant) -> Enum,
+// {
+// }
+
+// unsafe impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E> Sync
+//     for EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
+// where
+//     Root: std::borrow::Borrow<Enum>,
+//     Value: std::borrow::Borrow<Variant>,
+//     MutRoot: std::borrow::BorrowMut<Enum>,
+//     MutValue: std::borrow::BorrowMut<Variant>,
+//     G: Fn(Root) -> Option<Value> + Sync,
+//     S: Fn(MutRoot) -> Option<MutValue> + Sync,
+//     E: Fn(Variant) -> Enum + Sync,
+// {
+// }
 
 impl<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>
     EnumKp<Enum, Variant, Root, Value, MutRoot, MutValue, G, S, E>

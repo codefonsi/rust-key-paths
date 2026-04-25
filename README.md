@@ -284,3 +284,4 @@ Todos
 11. pub trait CoercionTrait
 12. pub trait HofTrait - fn map
 13. Helper functions
+14. Send + Sync for Kp and EnumKP
