@@ -45,6 +45,61 @@ pub type KpDynamic<R, V> = Kp<
     Box<dyn for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Send + Sync>,
 >;
 
+impl<'a, R: 'static, V: 'static> KpType<'a, R, V> {
+    /// Converts this keypath to [KpDynamic] for dynamic dispatch and storage.
+    #[inline]
+    pub fn to_dynamic(self) -> KpDynamic<R, V> {
+        self.into()
+    }
+}
+
+impl<'a, R: 'static, V: 'static> From<KpType<'a, R, V>> for KpDynamic<R, V> {
+    #[inline]
+    fn from(kp: KpType<'a, R, V>) -> Self {
+        let get_fn = kp.get;
+        let set_fn = kp.set;
+        Kp::new(
+            Box::new(move |t: &R| get_fn(t)),
+            Box::new(move |t: &mut R| set_fn(t)),
+        )
+    }
+}
+
+impl<R, V, G, S> Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V> + Send + Sync + 'static,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Send + Sync + 'static,
+{
+    /// Erases concrete getter/setter types into [`KpDynamic`].
+    #[inline]
+    pub fn into_dynamic(self) -> KpDynamic<R, V> {
+        let g = self.get;
+        let s = self.set;
+        Kp::new(
+            Box::new(move |t: &R| g(t)),
+            Box::new(move |t: &mut R| s(t)),
+        )
+    }
+}
+
+impl<R, V>
+    Kp<
+        R,
+        V,
+        Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+        Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
+    >
+{
+    /// Build a dynamic keypath from closures (useful for captured state).
+    pub fn from_closures<G, S>(get: G, set: S) -> Self
+    where
+        G: for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync + 'static,
+        S: for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync + 'static,
+    {
+        Self::new(Box::new(get), Box::new(set))
+    }
+}
+
 // pub struct KpStatic<R, V> {
 //     pub get: fn(&R) -> Option<&V>,
 //     pub set: fn(&mut R) -> Option<&mut V>,
