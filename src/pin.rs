@@ -1,3 +1,160 @@
+//! Pin-project keypath support for `#[pin]` future fields.
+//!
+//! This module lets you compose:
+//! - a synchronous keypath step (`Kp` or any `SyncKeyPathLike`)
+//! - followed by a pinned future await step (`PinFutureAwaitLike`)
+//!
+//! # Pros
+//! - Works with `pin_project`-generated helpers and macro-based keypaths.
+//! - Keeps chaining ergonomic with `then_pin_future(...).get_mut(...).await`.
+//! - Preserves zero-sized behavior when closures/segments are zero-sized.
+//!
+//! # Cons
+//! - Read-only `get` cannot await and always returns `None`.
+//! - Requires `Unpin` for the bridged mutable value target type.
+//!
+//! # Warnings
+//! - The `get_mut` chain requires mutable access to the root and intermediate value.
+//! - If an upstream keypath fails, the pinned await step is never executed.
+
+use std::pin::Pin;
+
+use crate::{KPWritable, Kp, KpReadable, PinFutureAwaitLike, SyncKeyPathLike};
+
+/// Async keypath value that awaits a `#[pin]` future field.
+#[derive(Clone)]
+pub struct PinFutureAwaitKp<S, Output, L>
+where
+    L: Clone,
+{
+    inner: L,
+    _p: std::marker::PhantomData<fn() -> (S, Output)>,
+}
+
+impl<S, Output, L> PinFutureAwaitKp<S, Output, L>
+where
+    L: PinFutureAwaitLike<S, Output> + Clone,
+{
+    #[inline]
+    pub fn new(inner: L) -> Self {
+        Self {
+            inner,
+            _p: std::marker::PhantomData,
+        }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl<S, Output, L> PinFutureAwaitLike<S, Output> for PinFutureAwaitKp<S, Output, L>
+where
+    L: PinFutureAwaitLike<S, Output> + Sync + Clone,
+{
+    async fn get_await(&self, this: Pin<&mut S>) -> Option<Output> {
+        self.inner.get_await(this).await
+    }
+}
+
+/// Macro to create a [`PinFutureAwaitKp`] from a type's derived pin-await method.
+#[macro_export]
+macro_rules! pin_future_await_kp {
+    ($ty:ty, $method:ident -> $output:ty) => {{
+        #[derive(Clone, Copy)]
+        struct KpImpl;
+        #[::async_trait::async_trait(?Send)]
+        impl $crate::PinFutureAwaitLike<$ty, $output> for KpImpl {
+            async fn get_await(&self, this: std::pin::Pin<&mut $ty>) -> Option<$output> {
+                <$ty>::$method(this).await
+            }
+        }
+        $crate::pin::PinFutureAwaitKp::new(KpImpl)
+    }};
+}
+
+/// Keypath chain that sync-navigates to `S` then awaits a pinned future from `S`.
+#[derive(Clone)]
+pub struct KpThenPinFuture<R, S, Output, First, Second> {
+    pub(crate) first: First,
+    pub(crate) second: Second,
+    pub(crate) _p: std::marker::PhantomData<(R, S, Output)>,
+}
+
+impl<R, S, Output, First, Second> KpThenPinFuture<R, S, Output, First, Second> {
+    #[inline]
+    pub fn new(first: First, second: Second) -> Self {
+        Self {
+            first,
+            second,
+            _p: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<R, S, Output, First, Second> KpThenPinFuture<R, S, Output, First, Second>
+where
+    S: Unpin,
+    Output: 'static,
+    First: SyncKeyPathLike<R, S>,
+    Second: PinFutureAwaitLike<S, Output>,
+{
+    /// Immutable access cannot await pinned futures; returns `None`.
+    pub async fn get(&self, _root: &R) -> Option<Output> {
+        None
+    }
+
+    /// Mutable access chain: sync navigate then await pinned future.
+    pub async fn get_mut(&self, root: &mut R) -> Option<Output> {
+        let s: &mut S = self.first.sync_get_mut(root)?;
+        self.second.get_await(Pin::new(s)).await
+    }
+
+    #[inline]
+    pub async fn get_optional(&self, root: Option<&R>) -> Option<Output> {
+        match root {
+            Some(r) => self.get(r).await,
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub async fn get_mut_optional(&self, root: Option<&mut R>) -> Option<Output> {
+        match root {
+            Some(r) => self.get_mut(r).await,
+            None => None,
+        }
+    }
+
+    #[inline]
+    pub async fn get_or_else<F>(&self, root: Option<&R>, f: F) -> Output
+    where
+        F: FnOnce() -> Output,
+    {
+        self.get_optional(root).await.unwrap_or_else(f)
+    }
+
+    #[inline]
+    pub async fn get_mut_or_else<F>(&self, root: Option<&mut R>, f: F) -> Output
+    where
+        F: FnOnce() -> Output,
+    {
+        self.get_mut_optional(root).await.unwrap_or_else(f)
+    }
+}
+
+impl<R, V, G, S> SyncKeyPathLike<R, V> for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+{
+    #[inline]
+    fn sync_get<'a>(&self, root: &'a R) -> Option<&'a V> {
+        self.get(root)
+    }
+
+    #[inline]
+    fn sync_get_mut<'a>(&self, root: &'a mut R) -> Option<&'a mut V> {
+        self.set(root)
+    }
+}
 // //! Pin-project keypath support: #[pin] Future field await.
 // //!
 // //! Enables composing `fut_await` with [crate::Kp::then_pin_future], e.g.:

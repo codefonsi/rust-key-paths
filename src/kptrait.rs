@@ -1,4 +1,6 @@
 use crate::Kp;
+use async_trait::async_trait;
+use std::pin::Pin;
 
 /// Used so that `then_async` can infer `V2` from `AsyncKp::Value` without ambiguity
 /// (e.g. `&i32` has both `Borrow<i32>` and `Borrow<&i32>`; this picks the referent).
@@ -320,4 +322,16 @@ pub trait LockAccess<Lock, Mid> {
     fn with_write<Rv, F>(&self, lock: &Lock, f: F) -> Option<Rv>
     where
         F: FnOnce(&mut Mid) -> Option<Rv>;
+}
+
+/// Sync keypath abstraction used by composed async/pin keypaths.
+pub trait SyncKeyPathLike<R, V> {
+    fn sync_get<'a>(&self, root: &'a R) -> Option<&'a V>;
+    fn sync_get_mut<'a>(&self, root: &'a mut R) -> Option<&'a mut V>;
+}
+
+/// Await abstraction for `#[pin]` future keypaths.
+#[async_trait(?Send)]
+pub trait PinFutureAwaitLike<S, Output> {
+    async fn get_await(&self, this: Pin<&mut S>) -> Option<Output>;
 }
