@@ -1360,52 +1360,53 @@ pub trait AccessorTrait<R, V>: KpTrait<R, V> {
     }
 }
 
-// pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-// where
-//     Root: std::borrow::Borrow<R>,
-//     Value: std::borrow::Borrow<V>,
-//     MutRoot: std::borrow::BorrowMut<R>,
-//     MutValue: std::borrow::BorrowMut<V>,
-//     G: Fn(Root) -> Option<Value>,
-//     S: Fn(MutRoot) -> Option<MutValue>,
-// {
-//     fn for_arc<'b>(
-//         &self,
-//     ) -> Kp<
-//         std::sync::Arc<R>,
-//         V,
-//         std::sync::Arc<R>,
-//         Value,
-//         std::sync::Arc<R>,
-//         MutValue,
-//         impl Fn(std::sync::Arc<R>) -> Option<Value>,
-//         impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
-//     >
-//     where
-//         R: 'b,
-//         V: 'b,
-//         Root: for<'a> From<&'a R>,
-//         MutRoot: for<'a> From<&'a mut R>;
+pub trait CoercionTrait<R, V>: KpTrait<R, V> {
+    fn for_arc(
+        &self,
+    ) -> Kp<
+        std::sync::Arc<R>,
+        V,
+        impl for<'r> Fn(&'r std::sync::Arc<R>) -> Option<&'r V> + '_,
+        impl for<'r> Fn(&'r mut std::sync::Arc<R>) -> Option<&'r mut V> + '_,
+    > {
+        Kp::new(
+            move |arc_root: &std::sync::Arc<R>| self.get(arc_root.as_ref()),
+            move |arc_root: &mut std::sync::Arc<R>| {
+                std::sync::Arc::get_mut(arc_root).and_then(|r_mut| self.set(r_mut))
+            },
+        )
+    }
 
-//     fn for_box<'a>(
-//         &self,
-//     ) -> Kp<
-//         Box<R>,
-//         V,
-//         Box<R>,
-//         Value,
-//         Box<R>,
-//         MutValue,
-//         impl Fn(Box<R>) -> Option<Value>,
-//         impl Fn(Box<R>) -> Option<MutValue>,
-//     >
-//     where
-//         R: 'a,
-//         V: 'a,
-//         Root: for<'b> From<&'b R>,
-//         MutRoot: for<'b> From<&'b mut R>;
+    fn for_box(
+        &self,
+    ) -> Kp<
+        Box<R>,
+        V,
+        impl for<'r> Fn(&'r Box<R>) -> Option<&'r V> + '_,
+        impl for<'r> Fn(&'r mut Box<R>) -> Option<&'r mut V> + '_,
+    > {
+        Kp::new(
+            move |boxed_root: &Box<R>| self.get(boxed_root.as_ref()),
+            move |boxed_root: &mut Box<R>| self.set(boxed_root.as_mut()),
+        )
+    }
 
-// }
+    /// Convert a keypath-like object into a getter closure.
+    fn into_get(self) -> impl for<'r> Fn(&'r R) -> Option<&'r V>
+    where
+        Self: Sized,
+    {
+        move |root: &R| self.get(root)
+    }
+
+    /// Convert a keypath-like object into a setter closure.
+    fn into_set(self) -> impl for<'r> Fn(&'r mut R) -> Option<&'r mut V>
+    where
+        Self: Sized,
+    {
+        move |root: &mut R| self.set(root)
+    }
+}
 
 pub trait HofTrait<R, V, G, S>: KpTrait<R, V>
 where
@@ -1663,90 +1664,12 @@ where
     // }
 }
 
-// impl<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-// where
-//     Root: std::borrow::Borrow<R>,
-//     Value: std::borrow::Borrow<V>,
-//     MutRoot: std::borrow::BorrowMut<R>,
-//     MutValue: std::borrow::BorrowMut<V>,
-//     G: Fn(Root) -> Option<Value>,
-//     S: Fn(MutRoot) -> Option<MutValue>,
-// {
-//     fn for_arc<'b>(
-//         &self,
-//     ) -> Kp<
-//         std::sync::Arc<R>,
-//         V,
-//         std::sync::Arc<R>,
-//         Value,
-//         std::sync::Arc<R>,
-//         MutValue,
-//         impl Fn(std::sync::Arc<R>) -> Option<Value>,
-//         impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
-//     >
-//     where
-//         R: 'b,
-//         V: 'b,
-//         Root: for<'a> From<&'a R>,
-//         MutRoot: for<'a> From<&'a mut R>,
-//     {
-//         Kp::new(
-//             move |arc_root: std::sync::Arc<R>| {
-//                 let r_ref: &R = &*arc_root;
-//                 (self.get)(Root::from(r_ref))
-//             },
-//             move |mut arc_root: std::sync::Arc<R>| {
-//                 // Get mutable reference only if we have exclusive ownership
-//                 std::sync::Arc::get_mut(&mut arc_root)
-//                     .and_then(|r_mut| (self.set)(MutRoot::from(r_mut)))
-//             },
-//         )
-//     }
-
-//     fn for_box<'a>(
-//         &self,
-//     ) -> Kp<
-//         Box<R>,
-//         V,
-//         Box<R>,
-//         Value,
-//         Box<R>,
-//         MutValue,
-//         impl Fn(Box<R>) -> Option<Value>,
-//         impl Fn(Box<R>) -> Option<MutValue>,
-//     >
-//     where
-//         R: 'a,
-//         V: 'a,
-//         Root: for<'b> From<&'b R>,
-//         MutRoot: for<'b> From<&'b mut R>,
-//     {
-//         Kp::new(
-//             move |r: Box<R>| {
-//                 let r_ref: &R = r.as_ref();
-//                 (self.get)(Root::from(r_ref))
-//             },
-//             move |mut r: Box<R>| {
-//                 // Get mutable reference only if we have exclusive ownership
-//                 (self.set)(MutRoot::from(r.as_mut()))
-//             },
-//         )
-//     }
-
-//     /// set fn is converting fn pointer to Fn closure
-//     #[inline]
-//     fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue> {
-//         self.set
-//     }
-
-//     /// get fn is converting fn pointer to Fn closure
-//     #[inline]
-//     fn into_get(self) -> impl Fn(Root) -> Option<Value> {
-//         self.get
-//     }
-// }
+impl<R, V, G, S> CoercionTrait<R, V> for Kp<R, V, G, S>
+where
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
+{
+}
 
 impl<R, V, G, S> HofTrait<R, V, G, S> for Kp<R, V, G, S>
 where

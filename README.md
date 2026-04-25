@@ -280,9 +280,9 @@ Todos
 7. PKP 
 8. AKP
 9. pub trait ChainExt
-10. pub trait AccessorTrait
-11. pub trait CoercionTrait
-12. pub trait HofTrait - fn map
+10. pub trait AccessorTrait - Done
+11. pub trait CoercionTrait - Done
+12. pub trait HofTrait - fn map - Done
 13. Helper functions + enum_variant
 14. Send + Sync for Kp and EnumKP
 15. HOF enumkp
