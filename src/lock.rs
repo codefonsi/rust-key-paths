@@ -578,11 +578,13 @@ where
         // Extract closures (move, no clone)
         let next_get = self.next.get;
         let next_set = self.next.set;
+        let second_get = next_kp.get;
+        let second_set = next_kp.set;
 
         // Create chained keypath by composing closures (no cloning)
         let chained_kp = Kp::new(
-            move |mid_value: MidValue| next_get(mid_value).and_then(|v| (next_kp.get)(v)),
-            move |mid_value: MutMid| next_set(mid_value).and_then(|v| (next_kp.set)(v)),
+            move |mid_value: MidValue| next_get(mid_value).and_then(|v| second_get(v)),
+            move |mid_value: MutMid| next_set(mid_value).and_then(|v| second_set(v)),
         );
 
         LockKp::new(self.prev, self.mid, chained_kp)
@@ -828,9 +830,12 @@ where
             std::borrow::BorrowMut<<AsyncKp::Value as crate::KeyPathValueTarget>::Target>,
         <AsyncKp::Value as crate::KeyPathValueTarget>::Target: 'static,
     {
+        let first = self;
+        let second = async_kp;
+
         crate::async_lock::KpThenAsyncKeyPath {
-            first: self,
-            second: async_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }

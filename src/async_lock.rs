@@ -717,9 +717,11 @@ where
     {
         let next_get = self.next.get;
         let next_set = self.next.set;
+        let second_get = next_kp.get;
+        let second_set = next_kp.set;
         let chained_kp = crate::Kp::new(
-            move |mid_value: MidValue| next_get(mid_value).and_then(|v| (next_kp.get)(v)),
-            move |mid_value: MutMid| next_set(mid_value).and_then(|v| (next_kp.set)(v)),
+            move |mid_value: MidValue| next_get(mid_value).and_then(|v| second_get(v)),
+            move |mid_value: MutMid| next_set(mid_value).and_then(|v| second_set(v)),
         );
         AsyncLockKp::new(self.prev, self.mid, chained_kp)
     }
@@ -807,9 +809,12 @@ where
         G2_2: Fn(MidValue2) -> Option<Value2>,
         S2_2: Fn(MutMid2) -> Option<MutValue2>,
     {
+        let first = self;
+        let second = lock_kp;
+
         AsyncLockKpThenLockKp {
-            first: self,
-            second: lock_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -912,9 +917,12 @@ where
         G2_2: Fn(MidValue2) -> Option<Value2> + Clone,
         S2_2: Fn(MutMid2) -> Option<MutValue2> + Clone,
     {
+        let first = self;
+        let second = other;
+
         ComposedAsyncLockKp {
-            first: self,
-            second: other,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1100,9 +1108,12 @@ where
         S3_2: Fn(MutMid3) -> Option<MutValue3> + Clone,
         Lock3: Clone,
     {
+        let first = self;
+        let second = other;
+
         ComposedAsyncLockKp {
-            first: self,
-            second: other,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1131,9 +1142,12 @@ where
         G3: Fn(Value2) -> Option<Value3> + Clone,
         S3: Fn(MutValue2) -> Option<MutValue3> + Clone,
     {
+        let first = self;
+        let second = next_kp;
+
         AsyncKeyPathThenKp {
-            first: self,
-            second: next_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1220,9 +1234,12 @@ where
         G3_2: Fn(MidValue3) -> Option<Value3>,
         S3_2: Fn(MutMid3) -> Option<MutValue3>,
     {
+        let first = self;
+        let second = lock_kp;
+
         AsyncLockKpThenLockKp {
-            first: self,
-            second: lock_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1330,9 +1347,12 @@ where
         G3: Fn(Value2) -> Option<Value3> + Clone,
         S3: Fn(MutValue2) -> Option<MutValue3> + Clone,
     {
+        let first = self;
+        let second = next_kp;
+
         AsyncKeyPathThenKp {
-            first: self,
-            second: next_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1800,9 +1820,12 @@ where
         S3_2: Fn(MutMid3) -> Option<MutValue3> + Clone,
         Lock3: Clone,
     {
+        let first = self;
+        let second = other;
+
         ComposedAsyncLockKp {
-            first: self,
-            second: other,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1888,9 +1911,12 @@ where
         G3_2: Fn(MidValue3) -> Option<Value3>,
         S3_2: Fn(MutMid3) -> Option<MutValue3>,
     {
+        let first = self;
+        let second = lock_kp;
+
         AsyncLockKpThenLockKp {
-            first: self,
-            second: lock_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1918,9 +1944,12 @@ where
         G3: Fn(Value2) -> Option<Value3> + Clone,
         S3: Fn(MutValue2) -> Option<MutValue3> + Clone,
     {
+        let first = self;
+        let second = next_kp;
+
         AsyncKeyPathThenKp {
-            first: self,
-            second: next_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
