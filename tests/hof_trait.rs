@@ -73,10 +73,10 @@ fn hof_inspect_runs_side_effect_and_none_edge_case() {
     let kp = nums_kp();
     let inspect = kp.inspect(move |_| calls_in_closure.set(calls_in_closure.get() + 1));
 
-    assert_eq!(inspect(&root_enabled()).map(|v| v.len()), Some(4));
+    assert_eq!(inspect.get(&root_enabled()).map(|v| v.len()), Some(4));
     assert_eq!(calls.get(), 1);
 
-    assert_eq!(inspect(&root_disabled()).map(|v| v.len()), None);
+    assert_eq!(inspect.get(&root_disabled()).map(|v| v.len()), None);
     assert_eq!(calls.get(), 1);
 }
 

@@ -1448,16 +1448,32 @@ where
         move |root: &R| self.get(root).and_then(&mapper)
     }
 
-    /// Runs `inspector` for side effects and returns the original value.
-    fn inspect<F>(&self, inspector: F) -> impl for<'r> Fn(&'r R) -> Option<&'r V> + '_
+    /// Runs `inspector` for side effects and returns a keypath for the same value.
+    fn inspect<F>(
+        &self,
+        inspector: F,
+    ) -> Kp<
+        R,
+        V,
+        impl for<'r> Fn(&'r R) -> Option<&'r V> + '_,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut V> + '_,
+    >
     where
-        F: Fn(&V) + 'static,
+        F: Fn(&V) + Clone + 'static,
     {
-        move |root: &R| {
-            self.get(root).inspect(|value| {
-                inspector(value);
-            })
-        }
+        let inspector_for_get = inspector.clone();
+        Kp::new(
+            move |root: &R| {
+                self.get(root).inspect(|value| {
+                    inspector_for_get(value);
+                })
+            },
+            move |root: &mut R| {
+                self.set(root).inspect(|value| {
+                    inspector(value);
+                })
+            },
+        )
     }
 
     /// Flat map - maps to an iterator and flattens.
