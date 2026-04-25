@@ -108,6 +108,7 @@ fn main() {
     let kp = Rectangle::size().then(Size::width());
     let kp= kp.get;
 
+    println!("size of kp = {}", size_of_val(&kp));
     // let x: fn(&Rectangle) -> Option<&Size> = Rectangle::size().get;
     // let y = that_takes(x);
 

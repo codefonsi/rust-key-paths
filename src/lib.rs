@@ -1833,9 +1833,14 @@ where
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
     {
+        let first_get = self.get;
+        let first_set = self.set;
+        let second_get = next.get;
+        let second_set = next.set;
+
         Kp::new(
-            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
-            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+            move |root: Root| first_get(root).and_then(|value| second_get(value)),
+            move |root: MutRoot| first_set(root).and_then(|value| second_set(value)),
         )
     }
 
@@ -2062,10 +2067,14 @@ where
         G2: Fn(Value) -> Option<SubValue>,
         S2: Fn(MutValue) -> Option<MutSubValue>,
     {
+        let first_get = self.get;
+        let first_set = self.set;
+        let second_get = next.get;
+        let second_set = next.set;
 
         Kp::new(
-            move |root: Root| (self.get)(root).and_then(|value| (next.get)(value)),
-            move |root: MutRoot| (self.set)(root).and_then(|value| (next.set)(value)),
+            move |root: Root| first_get(root).and_then(|value| second_get(value)),
+            move |root: MutRoot| first_set(root).and_then(|value| second_set(value)),
         )
     }
 }
