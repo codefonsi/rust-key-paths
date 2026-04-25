@@ -1328,36 +1328,37 @@ pub trait KPWritable<R, V> {
 //     }
 // }
 
-// pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
-//     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
-//     fn get_optional(&self, root: Option<Root>) -> Option<Value>;
-//     //  {
-//     //     root.and_then(|r| self.get(r))
-//     // }
+pub trait AccessorTrait<R, V>: KpTrait<R, V> {
+    /// Like [get](KpReadable::get), but takes an optional root.
+    #[inline]
+    fn get_optional<'a>(&self, root: Option<&'a R>) -> Option<&'a V> {
+        root.and_then(|r| self.get(r))
+    }
 
-//     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
-//     fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>;
-//     // {
-//     //     root.and_then(|r| self.get_mut(r))
-//     // }
+    /// Like [set](KPWritable::set), but takes an optional mutable root.
+    #[inline]
+    fn get_mut_optional<'a>(&self, root: Option<&'a mut R>) -> Option<&'a mut V> {
+        root.and_then(|r| self.set(r))
+    }
 
-//     /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
-//     fn get_or_else<F>(&self, root: Root, f: F) -> Value
-//     where
-//         F: FnOnce() -> Value;
-//     // {
-//     //     self.get(root).unwrap_or_else(f)
-//     // }
+    /// Returns the value if the keypath succeeds, otherwise returns fallback from `f`.
+    #[inline]
+    fn get_or_else<'a, F>(&self, root: &'a R, f: F) -> &'a V
+    where
+        F: FnOnce() -> &'a V,
+    {
+        self.get(root).unwrap_or_else(f)
+    }
 
-//     /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
-//     #[inline]
-//     fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
-//     where
-//         F: FnOnce() -> MutValue;
-//     // {
-//     //     self.get_mut(root).unwrap_or_else(f)
-//     // }
-// }
+    /// Returns the mutable value if the keypath succeeds, otherwise returns fallback from `f`.
+    #[inline]
+    fn get_mut_or_else<'a, F>(&self, root: &'a mut R, f: F) -> &'a mut V
+    where
+        F: FnOnce() -> &'a mut V,
+    {
+        self.set(root).unwrap_or_else(f)
+    }
+}
 
 // pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
 // where
@@ -1404,11 +1405,6 @@ pub trait KPWritable<R, V> {
 //         Root: for<'b> From<&'b R>,
 //         MutRoot: for<'b> From<&'b mut R>;
 
-//     /// set fn is converting fn pointer to Fn closure
-//     fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue>;
-
-//     /// get fn is converting fn pointer to Fn closure
-//     fn into_get(self) -> impl Fn(Root) -> Option<Value>;
 // }
 
 pub trait HofTrait<R, V, G, S>: KpTrait<R, V>
@@ -1759,47 +1755,14 @@ where
 {
 }
 
-// impl<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-// where
-//     Root: std::borrow::Borrow<R>,
-//     Value: std::borrow::Borrow<V>,
-//     MutRoot: std::borrow::BorrowMut<R>,
-//     MutValue: std::borrow::BorrowMut<V>,
-//     G: Fn(Root) -> Option<Value>,
-//     S: Fn(MutRoot) -> Option<MutValue>,
-// {
-//     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
-//     #[inline]
-//     fn get_optional(&self, root: Option<Root>) -> Option<Value> {
-//         root.and_then(|r| (self.get)(r))
-//     }
-
-//     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
-//     #[inline]
-//     fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue> {
-//         root.and_then(|r| (self.set)(r))
-//     }
-
-//     /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
-//     #[inline]
-//     fn get_or_else<F>(&self, root: Root, f: F) -> Value
-//     where
-//         F: FnOnce() -> Value,
-//     {
-//         (self.get)(root).unwrap_or_else(f)
-//     }
-
-//     /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
-//     #[inline]
-//     fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
-//     where
-//         F: FnOnce() -> MutValue,
-//     {
-//         (self.set)(root).unwrap_or_else(f)
-//     }
-// }
+impl<R, V, G, S> AccessorTrait<R, V> for Kp<R, V, G, S>
+where
+    R: Send + Sync,
+    V: Send + Sync,
+    G: for<'r> Fn(&'r R) -> Option<&'r V> + Send + Sync,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V> + Send + Sync,
+{
+}
 
 /// AKp (AnyKeyPath) - Hides both Root and Value types
 /// Most flexible keypath type for heterogeneous collections
