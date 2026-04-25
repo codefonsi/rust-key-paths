@@ -1251,9 +1251,12 @@ where
         G2: Fn(MidValue) -> Option<Value2>,
         S2: Fn(MutMid) -> Option<MutValue2>,
     {
+        let first = self;
+        let second = lock_kp;
+
         crate::lock::KpThenLockKp {
-            first: self,
-            second: lock_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1270,9 +1273,12 @@ where
         MutValue: std::borrow::BorrowMut<Struct>,
         L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
     {
+        let first = self;
+        let second = pin_fut;
+
         crate::pin::KpThenPinFuture {
-            first: self,
-            second: pin_fut,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
@@ -1302,9 +1308,12 @@ where
         AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
         <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
     {
+        let first = self;
+        let second = async_kp;
+
         crate::async_lock::KpThenAsyncKeyPath {
-            first: self,
-            second: async_kp,
+            first: first,
+            second: second,
             _p: std::marker::PhantomData,
         }
     }
