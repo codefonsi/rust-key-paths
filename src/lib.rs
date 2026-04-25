@@ -18,8 +18,8 @@ pub mod lock;
 pub mod prelude;
 pub mod kptrait;
 pub use kptrait::{
-    AccessorTrait, CoercionTrait, HofTrait, KPWritable, KeyPathValueTarget, KpReadable, KpTrait,
-    LockAccess, PinFutureAwaitLike, SyncKeyPathLike,
+    AccessorTrait, AsyncKeyPathLike, AsyncLockLike, CoercionTrait, HofTrait, KPWritable,
+    KeyPathValueTarget, KpReadable, KpTrait, LockAccess, PinFutureAwaitLike, SyncKeyPathLike,
 };
 
 // pub use lock::{

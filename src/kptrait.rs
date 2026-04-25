@@ -335,3 +335,22 @@ pub trait SyncKeyPathLike<R, V> {
 pub trait PinFutureAwaitLike<S, Output> {
     async fn get_await(&self, this: Pin<&mut S>) -> Option<Output>;
 }
+
+/// Async lock adapter abstraction used by async lock keypaths.
+#[async_trait(?Send)]
+pub trait AsyncLockLike<Lock, Mid>: Send + Sync {
+    async fn with_read<Rv, F>(&self, lock: &Lock, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&Mid) -> Option<Rv>;
+
+    async fn with_write<Rv, F>(&self, lock: &Lock, f: F) -> Option<Rv>
+    where
+        F: FnOnce(&mut Mid) -> Option<Rv>;
+}
+
+/// Async keypath abstraction for async composition.
+#[async_trait(?Send)]
+pub trait AsyncKeyPathLike<R> {
+    type Value;
+    async fn get(&self, root: &R) -> Option<Self::Value>;
+}

@@ -83,7 +83,7 @@ async fn integration_async_lock_then_lock_then_chain() {
     // Simplest composition: root_lock.then_lock(parking_kp).then_async(async_kp).then_lock(std_lock_kp)
     // When the first segment yields reference types, .then_async() requires MutValue2: BorrowMut<Value2>,
     // so we build the chain in two parts and use the same naming.
-    let with_parking = root_lock.then_lock(parking_kp);
+    let with_parking = root_lock.clone().then_lock(parking_kp);
 
     // Read: with_parking -> Level2
     let result = with_parking.get(&root).await;
@@ -92,23 +92,35 @@ async fn integration_async_lock_then_lock_then_chain() {
 
     // Two-step to Level3 and inner i32 (same logical chain: then_async then then_lock)
     let l2 = with_parking.get(&root).await.unwrap();
-    let l3 = async_kp.get(l2).await;
-    assert!(l3.is_some());
-    let inner = std_lock_kp.get(l3.unwrap());
-    assert_eq!(inner, Some(&7));
+    assert!(
+        async_kp
+            .update(&l2, |l3| {
+                let v = std_lock_kp.get(l3).unwrap();
+                assert_eq!(v, 7);
+            })
+            .await
+    );
 
-    // Write Level2
-    let mut_root = &mut root.clone();
-    with_parking.get_mut(mut_root).await.unwrap().value = 100;
+    // Write Level2 through async updater.
+    assert!(root_lock.update(&root, |l1| l1.parking.lock().value = 100).await);
     assert_eq!(with_parking.get(&root).await.unwrap().value, 100);
 
-    // Write Level3.value (inner i32) via async_kp then std_lock_kp
-    let mut_root2 = &mut root.clone();
-    let mut_l2 = with_parking.get_mut(mut_root2).await.unwrap();
-    let mut_l3 = async_kp.get_mut(mut_l2).await.unwrap();
-    *std_lock_kp.get_mut(mut_l3).unwrap() = 99;
+    // Write Level3.value (inner i32) via async updater + sync lock update.
+    assert!(
+        async_kp
+            .update(&with_parking.get(&root).await.unwrap(), |l3| {
+                let _ = std_lock_kp.update(l3, |v| *v = 99);
+            })
+            .await
+    );
 
     let l2_again = with_parking.get(&root).await.unwrap();
-    let l3_again = async_kp.get(l2_again).await;
-    assert_eq!(std_lock_kp.get(l3_again.unwrap()), Some(&99));
+    assert!(
+        async_kp
+            .update(&l2_again, |l3| {
+                let v = std_lock_kp.get(l3).unwrap();
+                assert_eq!(v, 99);
+            })
+            .await
+    );
 }
