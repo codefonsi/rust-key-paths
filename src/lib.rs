@@ -17,16 +17,16 @@ use std::sync::Arc;
 pub mod lock;
 pub mod prelude;
 
-pub use lock::{
-    ArcMutexAccess, ArcRwLockAccess, LockAccess, LockKp, LockKpType, RcRefCellAccess,
-    StdMutexAccess, StdRwLockAccess,
-};
+// pub use lock::{
+//     ArcMutexAccess, ArcRwLockAccess, LockAccess, LockKp, LockKpType, RcRefCellAccess,
+//     StdMutexAccess, StdRwLockAccess,
+// };
 
-#[cfg(feature = "parking_lot")]
-pub use lock::{
-    DirectParkingLotMutexAccess, DirectParkingLotRwLockAccess, ParkingLotMutexAccess,
-    ParkingLotRwLockAccess,
-};
+// #[cfg(feature = "parking_lot")]
+// pub use lock::{
+//     DirectParkingLotMutexAccess, DirectParkingLotRwLockAccess, ParkingLotMutexAccess,
+//     ParkingLotRwLockAccess,
+// };
 
 // Export the async_lock module
 pub mod async_lock;
@@ -322,74 +322,74 @@ impl<T> KeyPathValueTarget for &mut T {
 //     }
 // }
 
-impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V> {
-    #[inline]
-    fn from(kp: KpType<'a, R, V>) -> Self {
-        let get_fn = kp.get;
-        let set_fn = kp.set;
-        Kp::new(
-            Box::new(move |t: &R| get_fn(t)),
-            Box::new(move |t: &mut R| set_fn(t)),
-        )
-    }
-}
+// impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V> {
+//     #[inline]
+//     fn from(kp: KpType<'a, R, V>) -> Self {
+//         let get_fn = kp.get;
+//         let set_fn = kp.set;
+//         Kp::new(
+//             Box::new(move |t: &R| get_fn(t)),
+//             Box::new(move |t: &mut R| set_fn(t)),
+//         )
+//     }
+// }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value> + Send + Sync + 'static,
-    S: Fn(MutRoot) -> Option<MutValue> + Send + Sync + 'static,
-    R: 'static,
-    V: 'static,
-{
-    /// Erases getter/setter type into [`KpDynamic`] so you can store composed paths (e.g. after [KpTrait::then]).
-    ///
-    /// `#[derive(Kp)]` methods return [`KpType`] (`fn` pointers); chaining with `.then()` produces opaque closures.
-    /// Neither matches a fixed `KpType<…>` field type—use `KpDynamic<R, V>` and `.into_dynamic()` (or
-    /// [KpType::to_dynamic] for a single segment).
-    ///
-    /// # Safety
-    ///
-    /// This uses a small amount of `unsafe` internally: it re-interprets `&R` / `&mut R` as `Root` / `MutRoot`.
-    /// That matches every [`Kp`] built from this crate’s public API ([`Kp::new`] on reference-shaped handles,
-    /// `#[derive(Kp)]`, and [KpTrait::then] / [Kp::then] on those paths). Do not call this on a custom [`Kp`]
-    /// whose `Root` / `MutRoot` are not layout-compatible with `&R` / `&mut R` or whose getters keep borrows
-    /// alive past the call.
-    #[inline]
-    pub fn into_dynamic(self) -> KpDynamic<R, V> {
-        let g = self.get;
-        let s = self.set;
-        Kp::new(
-            Box::new(move |t: &R| unsafe {
-                // SAFETY: See `into_dynamic` rustdoc. `Root` is `&'_ R` for supported keypaths.
-               // debug_assert_eq!(std::mem::size_of::<Root>(), std::mem::size_of::<&R>());
-                let root: Root = std::mem::transmute_copy(&t);
-                match g(root) {
-                    None => None,
-                    Some(v) => {
-                        let r: &V = std::borrow::Borrow::borrow(&v);
-                        // Well-behaved getters return a view into `*t`; re-attach to this call's `&R`.
-                        Some(std::mem::transmute::<&V, &V>(r))
-                    }
-                }
-            }),
-            Box::new(move |t: &mut R| unsafe {
-                // debug_assert_eq!(std::mem::size_of::<MutRoot>(), std::mem::size_of::<&mut R>());
-                let root: MutRoot = std::mem::transmute_copy(&t);
-                match s(root) {
-                    None => None,
-                    Some(mut v) => {
-                        let r: &mut V = std::borrow::BorrowMut::borrow_mut(&mut v);
-                        Some(std::mem::transmute::<&mut V, &mut V>(r))
-                    }
-                }
-            }),
-        )
-    }
-}
+// impl<R, V, Root, Value, MutRoot, MutValue, G, S> Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value> + Send + Sync + 'static,
+//     S: Fn(MutRoot) -> Option<MutValue> + Send + Sync + 'static,
+//     R: 'static,
+//     V: 'static,
+// {
+//     /// Erases getter/setter type into [`KpDynamic`] so you can store composed paths (e.g. after [KpTrait::then]).
+//     ///
+//     /// `#[derive(Kp)]` methods return [`KpType`] (`fn` pointers); chaining with `.then()` produces opaque closures.
+//     /// Neither matches a fixed `KpType<…>` field type—use `KpDynamic<R, V>` and `.into_dynamic()` (or
+//     /// [KpType::to_dynamic] for a single segment).
+//     ///
+//     /// # Safety
+//     ///
+//     /// This uses a small amount of `unsafe` internally: it re-interprets `&R` / `&mut R` as `Root` / `MutRoot`.
+//     /// That matches every [`Kp`] built from this crate’s public API ([`Kp::new`] on reference-shaped handles,
+//     /// `#[derive(Kp)]`, and [KpTrait::then] / [Kp::then] on those paths). Do not call this on a custom [`Kp`]
+//     /// whose `Root` / `MutRoot` are not layout-compatible with `&R` / `&mut R` or whose getters keep borrows
+//     /// alive past the call.
+//     #[inline]
+//     pub fn into_dynamic(self) -> KpDynamic<R, V> {
+//         let g = self.get;
+//         let s = self.set;
+//         Kp::new(
+//             Box::new(move |t: &R| unsafe {
+//                 // SAFETY: See `into_dynamic` rustdoc. `Root` is `&'_ R` for supported keypaths.
+//                // debug_assert_eq!(std::mem::size_of::<Root>(), std::mem::size_of::<&R>());
+//                 let root: Root = std::mem::transmute_copy(&t);
+//                 match g(root) {
+//                     None => None,
+//                     Some(v) => {
+//                         let r: &V = std::borrow::Borrow::borrow(&v);
+//                         // Well-behaved getters return a view into `*t`; re-attach to this call's `&R`.
+//                         Some(std::mem::transmute::<&V, &V>(r))
+//                     }
+//                 }
+//             }),
+//             Box::new(move |t: &mut R| unsafe {
+//                 // debug_assert_eq!(std::mem::size_of::<MutRoot>(), std::mem::size_of::<&mut R>());
+//                 let root: MutRoot = std::mem::transmute_copy(&t);
+//                 match s(root) {
+//                     None => None,
+//                     Some(mut v) => {
+//                         let r: &mut V = std::borrow::BorrowMut::borrow_mut(&mut v);
+//                         Some(std::mem::transmute::<&mut V, &mut V>(r))
+//                     }
+//                 }
+//             }),
+//         )
+//     }
+// }
 
 // pub type KpType<R, V> = Kp<
 //     R,
@@ -425,572 +425,571 @@ where
 //     fn then_lock() {}
 // }
 
-// New type alias for composed/transformed keypaths
-pub type KpComposed<R, V> = Kp<
-    R,
-    V,
-    &'static R,
-    &'static V,
-    &'static mut R,
-    &'static mut V,
-    Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
-    Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
->;
+// // New type alias for composed/transformed keypaths
+// pub type KpComposed<R, V> = Kp<
+//     R,
+//     V,
+//     &'static R,
+//     &'static V,
+//     &'static mut R,
+//     &'static mut V,
+//     Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+//     Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
+// >;
 
-impl<R, V>
-    Kp<
-        R,
-        V,
-        &'static R,
-        &'static V,
-        &'static mut R,
-        &'static mut V,
-        Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
-        Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
-    >
-{
-    /// Build a keypath from two closures (e.g. when they capture a variable like an index).
-    /// Same pattern as `Kp::new` in lock.rs; use this when the keypath captures variables.
-    pub fn from_closures<G, S>(get: G, set: S) -> Self
-    where
-        G: for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync + 'static,
-        S: for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync + 'static,
-    {
-        Self::new(Box::new(get), Box::new(set))
-    }
-}
+// impl<R, V>
+//     Kp<
+//         R,
+//         V,
+//         &'static R,
+//         &'static V,
+//         &'static mut R,
+//         &'static mut V,
+//         Box<dyn for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync>,
+//         Box<dyn for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync>,
+//     >
+// {
+//     /// Build a keypath from two closures (e.g. when they capture a variable like an index).
+//     /// Same pattern as `Kp::new` in lock.rs; use this when the keypath captures variables.
+//     pub fn from_closures<G, S>(get: G, set: S) -> Self
+//     where
+//         G: for<'b> Fn(&'b R) -> Option<&'b V> + Send + Sync + 'static,
+//         S: for<'b> Fn(&'b mut R) -> Option<&'b mut V> + Send + Sync + 'static,
+//     {
+//         Self::new(Box::new(get), Box::new(set))
+//     }
+// }
 
-pub struct AKp {
-    getter: Rc<dyn for<'r> Fn(&'r dyn Any) -> Option<&'r dyn Any>>,
-    root_type_id: TypeId,
-    value_type_id: TypeId,
-}
+// pub struct AKp {
+//     getter: Rc<dyn for<'r> Fn(&'r dyn Any) -> Option<&'r dyn Any>>,
+//     root_type_id: TypeId,
+//     value_type_id: TypeId,
+// }
 
-impl AKp {
-    /// Create a new AKp from a KpType (the common reference-based keypath)
-    pub fn new<'a, R, V>(keypath: KpType<'a, R, V>) -> Self
-    where
-        R: Any + 'static,
-        V: Any + 'static,
-    {
-        let root_type_id = TypeId::of::<R>();
-        let value_type_id = TypeId::of::<V>();
-        let getter_fn = keypath.get;
+// impl AKp {
+//     /// Create a new AKp from a KpType (the common reference-based keypath)
+//     pub fn new<'a, R, V>(keypath: KpType<'a, R, V>) -> Self
+//     where
+//         R: Any + 'static,
+//         V: Any + 'static,
+//     {
+//         let root_type_id = TypeId::of::<R>();
+//         let value_type_id = TypeId::of::<V>();
+//         let getter_fn = keypath.get;
 
-        Self {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(root) = any.downcast_ref::<R>() {
-                    getter_fn(root).map(|value: &V| value as &dyn Any)
-                } else {
-                    None
-                }
-            }),
-            root_type_id,
-            value_type_id,
-        }
-    }
+//         Self {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(root) = any.downcast_ref::<R>() {
+//                     getter_fn(root).map(|value: &V| value as &dyn Any)
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id,
+//             value_type_id,
+//         }
+//     }
 
-    /// Create an AKp from a KpType (alias for `new()`)
-    pub fn from<'a, R, V>(keypath: KpType<'a, R, V>) -> Self
-    where
-        R: Any + 'static,
-        V: Any + 'static,
-    {
-        Self::new(keypath)
-    }
+//     /// Create an AKp from a KpType (alias for `new()`)
+//     pub fn from<'a, R, V>(keypath: KpType<'a, R, V>) -> Self
+//     where
+//         R: Any + 'static,
+//         V: Any + 'static,
+//     {
+//         Self::new(keypath)
+//     }
 
-    /// Get the value as a trait object (with root type checking)
-    pub fn get<'r>(&self, root: &'r dyn Any) -> Option<&'r dyn Any> {
-        (self.getter)(root)
-    }
+//     /// Get the value as a trait object (with root type checking)
+//     pub fn get<'r>(&self, root: &'r dyn Any) -> Option<&'r dyn Any> {
+//         (self.getter)(root)
+//     }
 
-    /// Get the TypeId of the Root type
-    pub fn root_type_id(&self) -> TypeId {
-        self.root_type_id
-    }
+//     /// Get the TypeId of the Root type
+//     pub fn root_type_id(&self) -> TypeId {
+//         self.root_type_id
+//     }
 
-    /// Get the TypeId of the Value type
-    pub fn value_type_id(&self) -> TypeId {
-        self.value_type_id
-    }
+//     /// Get the TypeId of the Value type
+//     pub fn value_type_id(&self) -> TypeId {
+//         self.value_type_id
+//     }
 
-    /// Try to get the value with full type checking
-    pub fn get_as<'a, Root: Any, Value: Any>(&self, root: &'a Root) -> Option<Option<&'a Value>> {
-        if self.root_type_id == TypeId::of::<Root>() && self.value_type_id == TypeId::of::<Value>()
-        {
-            Some(
-                self.get(root as &dyn Any)
-                    .and_then(|any| any.downcast_ref::<Value>()),
-            )
-        } else {
-            None
-        }
-    }
+//     /// Try to get the value with full type checking
+//     pub fn get_as<'a, Root: Any, Value: Any>(&self, root: &'a Root) -> Option<Option<&'a Value>> {
+//         if self.root_type_id == TypeId::of::<Root>() && self.value_type_id == TypeId::of::<Value>()
+//         {
+//             Some(
+//                 self.get(root as &dyn Any)
+//                     .and_then(|any| any.downcast_ref::<Value>()),
+//             )
+//         } else {
+//             None
+//         }
+//     }
 
-    /// Get a human-readable name for the value type
-    pub fn kind_name(&self) -> String {
-        format!("{:?}", self.value_type_id)
-    }
+//     /// Get a human-readable name for the value type
+//     pub fn kind_name(&self) -> String {
+//         format!("{:?}", self.value_type_id)
+//     }
 
-    /// Get a human-readable name for the root type
-    pub fn root_kind_name(&self) -> String {
-        format!("{:?}", self.root_type_id)
-    }
+//     /// Get a human-readable name for the root type
+//     pub fn root_kind_name(&self) -> String {
+//         format!("{:?}", self.root_type_id)
+//     }
 
-    /// Adapt this keypath to work with Arc<Root> instead of Root
-    pub fn for_arc<Root>(&self) -> AKp
-    where
-        Root: Any + 'static,
-    {
-        let value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Adapt this keypath to work with Arc<Root> instead of Root
+//     pub fn for_arc<Root>(&self) -> AKp
+//     where
+//         Root: Any + 'static,
+//     {
+//         let value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(arc) = any.downcast_ref::<Arc<Root>>() {
-                    getter(arc.as_ref() as &dyn Any)
-                } else {
-                    None
-                }
-            }),
-            root_type_id: TypeId::of::<Arc<Root>>(),
-            value_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(arc) = any.downcast_ref::<Arc<Root>>() {
+//                     getter(arc.as_ref() as &dyn Any)
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: TypeId::of::<Arc<Root>>(),
+//             value_type_id,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Box<Root> instead of Root
-    pub fn for_box<Root>(&self) -> AKp
-    where
-        Root: Any + 'static,
-    {
-        let value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Adapt this keypath to work with Box<Root> instead of Root
+//     pub fn for_box<Root>(&self) -> AKp
+//     where
+//         Root: Any + 'static,
+//     {
+//         let value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(boxed) = any.downcast_ref::<Box<Root>>() {
-                    getter(boxed.as_ref() as &dyn Any)
-                } else {
-                    None
-                }
-            }),
-            root_type_id: TypeId::of::<Box<Root>>(),
-            value_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(boxed) = any.downcast_ref::<Box<Root>>() {
+//                     getter(boxed.as_ref() as &dyn Any)
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: TypeId::of::<Box<Root>>(),
+//             value_type_id,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Rc<Root> instead of Root
-    pub fn for_rc<Root>(&self) -> AKp
-    where
-        Root: Any + 'static,
-    {
-        let value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Adapt this keypath to work with Rc<Root> instead of Root
+//     pub fn for_rc<Root>(&self) -> AKp
+//     where
+//         Root: Any + 'static,
+//     {
+//         let value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(rc) = any.downcast_ref::<Rc<Root>>() {
-                    getter(rc.as_ref() as &dyn Any)
-                } else {
-                    None
-                }
-            }),
-            root_type_id: TypeId::of::<Rc<Root>>(),
-            value_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(rc) = any.downcast_ref::<Rc<Root>>() {
+//                     getter(rc.as_ref() as &dyn Any)
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: TypeId::of::<Rc<Root>>(),
+//             value_type_id,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Option<Root> instead of Root
-    pub fn for_option<Root>(&self) -> AKp
-    where
-        Root: Any + 'static,
-    {
-        let value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Adapt this keypath to work with Option<Root> instead of Root
+//     pub fn for_option<Root>(&self) -> AKp
+//     where
+//         Root: Any + 'static,
+//     {
+//         let value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(opt) = any.downcast_ref::<Option<Root>>() {
-                    opt.as_ref().and_then(|root| getter(root as &dyn Any))
-                } else {
-                    None
-                }
-            }),
-            root_type_id: TypeId::of::<Option<Root>>(),
-            value_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(opt) = any.downcast_ref::<Option<Root>>() {
+//                     opt.as_ref().and_then(|root| getter(root as &dyn Any))
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: TypeId::of::<Option<Root>>(),
+//             value_type_id,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Result<Root, E> instead of Root
-    pub fn for_result<Root, E>(&self) -> AKp
-    where
-        Root: Any + 'static,
-        E: Any + 'static,
-    {
-        let value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Adapt this keypath to work with Result<Root, E> instead of Root
+//     pub fn for_result<Root, E>(&self) -> AKp
+//     where
+//         Root: Any + 'static,
+//         E: Any + 'static,
+//     {
+//         let value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any: &dyn Any| {
-                if let Some(result) = any.downcast_ref::<Result<Root, E>>() {
-                    result
-                        .as_ref()
-                        .ok()
-                        .and_then(|root| getter(root as &dyn Any))
-                } else {
-                    None
-                }
-            }),
-            root_type_id: TypeId::of::<Result<Root, E>>(),
-            value_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any: &dyn Any| {
+//                 if let Some(result) = any.downcast_ref::<Result<Root, E>>() {
+//                     result
+//                         .as_ref()
+//                         .ok()
+//                         .and_then(|root| getter(root as &dyn Any))
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: TypeId::of::<Result<Root, E>>(),
+//             value_type_id,
+//         }
+//     }
 
-    /// Map the value through a transformation function with type checking
-    /// Both original and mapped values must implement Any
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{AKp, Kp, KpType};
-    /// struct User { name: String }
-    /// let user = User { name: "Akash".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-    /// let name_akp = AKp::new(name_kp);
-    /// let len_akp = name_akp.map::<User, String, _, _>(|s| s.len());
-    /// ```
-    pub fn map<Root, OrigValue, MappedValue, F>(&self, mapper: F) -> AKp
-    where
-        Root: Any + 'static,
-        OrigValue: Any + 'static,
-        MappedValue: Any + 'static,
-        F: Fn(&OrigValue) -> MappedValue + 'static,
-    {
-        let orig_root_type_id = self.root_type_id;
-        let orig_value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
-        let mapped_type_id = TypeId::of::<MappedValue>();
+//     /// Map the value through a transformation function with type checking
+//     /// Both original and mapped values must implement Any
+//     ///
+//     /// # Example
+//     /// ```
+//     /// use rust_key_paths::{AKp, Kp, KpType};
+//     /// struct User { name: String }
+//     /// let user = User { name: "Akash".to_string() };
+//     /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
+//     /// let name_akp = AKp::new(name_kp);
+//     /// let len_akp = name_akp.map::<User, String, _, _>(|s| s.len());
+//     /// ```
+//     pub fn map<Root, OrigValue, MappedValue, F>(&self, mapper: F) -> AKp
+//     where
+//         Root: Any + 'static,
+//         OrigValue: Any + 'static,
+//         MappedValue: Any + 'static,
+//         F: Fn(&OrigValue) -> MappedValue + 'static,
+//     {
+//         let orig_root_type_id = self.root_type_id;
+//         let orig_value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
+//         let mapped_type_id = TypeId::of::<MappedValue>();
 
-        AKp {
-            getter: Rc::new(move |any_root: &dyn Any| {
-                // Check root type matches
-                if any_root.type_id() == orig_root_type_id {
-                    getter(any_root).and_then(|any_value| {
-                        // Verify the original value type matches
-                        if orig_value_type_id == TypeId::of::<OrigValue>() {
-                            any_value.downcast_ref::<OrigValue>().map(|orig_val| {
-                                let mapped = mapper(orig_val);
-                                // Box the mapped value and return as &dyn Any
-                                Box::leak(Box::new(mapped)) as &dyn Any
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                } else {
-                    None
-                }
-            }),
-            root_type_id: orig_root_type_id,
-            value_type_id: mapped_type_id,
-        }
-    }
+//         AKp {
+//             getter: Rc::new(move |any_root: &dyn Any| {
+//                 // Check root type matches
+//                 if any_root.type_id() == orig_root_type_id {
+//                     getter(any_root).and_then(|any_value| {
+//                         // Verify the original value type matches
+//                         if orig_value_type_id == TypeId::of::<OrigValue>() {
+//                             any_value.downcast_ref::<OrigValue>().map(|orig_val| {
+//                                 let mapped = mapper(orig_val);
+//                                 // Box the mapped value and return as &dyn Any
+//                                 Box::leak(Box::new(mapped)) as &dyn Any
+//                             })
+//                         } else {
+//                             None
+//                         }
+//                     })
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: orig_root_type_id,
+//             value_type_id: mapped_type_id,
+//         }
+//     }
 
-    /// Filter the value based on a predicate with full type checking
-    /// Returns None if types don't match or predicate fails
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{AKp, Kp, KpType};
-    /// struct User { age: i32 }
-    /// let user = User { age: 30 };
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
-    /// let age_akp = AKp::new(age_kp);
-    /// let adult_akp = age_akp.filter::<User, i32, _>(|age| *age >= 18);
-    /// ```
-    pub fn filter<Root, Value, F>(&self, predicate: F) -> AKp
-    where
-        Root: Any + 'static,
-        Value: Any + 'static,
-        F: Fn(&Value) -> bool + 'static,
-    {
-        let orig_root_type_id = self.root_type_id;
-        let orig_value_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Filter the value based on a predicate with full type checking
+//     /// Returns None if types don't match or predicate fails
+//     ///
+//     /// # Example
+//     /// ```
+//     /// use rust_key_paths::{AKp, Kp, KpType};
+//     /// struct User { age: i32 }
+//     /// let user = User { age: 30 };
+//     /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
+//     /// let age_akp = AKp::new(age_kp);
+//     /// let adult_akp = age_akp.filter::<User, i32, _>(|age| *age >= 18);
+//     /// ```
+//     pub fn filter<Root, Value, F>(&self, predicate: F) -> AKp
+//     where
+//         Root: Any + 'static,
+//         Value: Any + 'static,
+//         F: Fn(&Value) -> bool + 'static,
+//     {
+//         let orig_root_type_id = self.root_type_id;
+//         let orig_value_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        AKp {
-            getter: Rc::new(move |any_root: &dyn Any| {
-                // Check root type matches
-                if any_root.type_id() == orig_root_type_id {
-                    getter(any_root).filter(|any_value| {
-                        // Type check value and apply predicate
-                        if orig_value_type_id == TypeId::of::<Value>() {
-                            any_value
-                                .downcast_ref::<Value>()
-                                .map(|val| predicate(val))
-                                .unwrap_or(false)
-                        } else {
-                            false
-                        }
-                    })
-                } else {
-                    None
-                }
-            }),
-            root_type_id: orig_root_type_id,
-            value_type_id: orig_value_type_id,
-        }
-    }
-}
+//         AKp {
+//             getter: Rc::new(move |any_root: &dyn Any| {
+//                 // Check root type matches
+//                 if any_root.type_id() == orig_root_type_id {
+//                     getter(any_root).filter(|any_value| {
+//                         // Type check value and apply predicate
+//                         if orig_value_type_id == TypeId::of::<Value>() {
+//                             any_value
+//                                 .downcast_ref::<Value>()
+//                                 .map(|val| predicate(val))
+//                                 .unwrap_or(false)
+//                         } else {
+//                             false
+//                         }
+//                     })
+//                 } else {
+//                     None
+//                 }
+//             }),
+//             root_type_id: orig_root_type_id,
+//             value_type_id: orig_value_type_id,
+//         }
+//     }
+// }
 
-impl fmt::Debug for AKp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AKp")
-            .field("root_type_id", &self.root_type_id)
-            .field("value_type_id", &self.value_type_id)
-            .finish_non_exhaustive()
-    }
-}
+// impl fmt::Debug for AKp {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("AKp")
+//             .field("root_type_id", &self.root_type_id)
+//             .field("value_type_id", &self.value_type_id)
+//             .finish_non_exhaustive()
+//     }
+// }
 
-impl fmt::Display for AKp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "AKp(root_type_id={:?}, value_type_id={:?})",
-            self.root_type_id, self.value_type_id
-        )
-    }
-}
+// impl fmt::Display for AKp {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(
+//             f,
+//             "AKp(root_type_id={:?}, value_type_id={:?})",
+//             self.root_type_id, self.value_type_id
+//         )
+//     }
+// }
 
-pub struct PKp<Root> {
-    getter: Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn Any>>,
-    value_type_id: TypeId,
-    _phantom: std::marker::PhantomData<Root>,
-}
+// pub struct PKp<Root> {
+//     getter: Rc<dyn for<'r> Fn(&'r Root) -> Option<&'r dyn Any>>,
+//     value_type_id: TypeId,
+//     _phantom: std::marker::PhantomData<Root>,
+// }
 
-impl<Root> PKp<Root>
-where
-    Root: 'static,
-{
-    /// Create a new PKp from a KpType (the common reference-based keypath)
-    pub fn new<'a, V>(keypath: KpType<'a, Root, V>) -> Self
-    where
-        V: Any + 'static,
-    {
-        let value_type_id = TypeId::of::<V>();
-        let getter_fn = keypath.get;
+// impl<Root> PKp<Root>
+// where
+//     Root: 'static,
+// {
+//     /// Create a new PKp from a KpType (the common reference-based keypath)
+//     pub fn new<'a, V>(keypath: KpType<'a, Root, V>) -> Self
+//     where
+//         V: Any + 'static,
+//     {
+//         let value_type_id = TypeId::of::<V>();
+//         let getter_fn = keypath.get;
 
-        Self {
-            getter: Rc::new(move |root: &Root| getter_fn(root).map(|val: &V| val as &dyn Any)),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         Self {
+//             getter: Rc::new(move |root: &Root| getter_fn(root).map(|val: &V| val as &dyn Any)),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Create a PKp from a KpType (alias for `new()`)
-    pub fn from<'a, V>(keypath: KpType<'a, Root, V>) -> Self
-    where
-        V: Any + 'static,
-    {
-        Self::new(keypath)
-    }
+//     /// Create a PKp from a KpType (alias for `new()`)
+//     pub fn from<'a, V>(keypath: KpType<'a, Root, V>) -> Self
+//     where
+//         V: Any + 'static,
+//     {
+//         Self::new(keypath)
+//     }
 
-    /// Get the value as a trait object
-    pub fn get<'r>(&self, root: &'r Root) -> Option<&'r dyn Any> {
-        (self.getter)(root)
-    }
+//     /// Get the value as a trait object
+//     pub fn get<'r>(&self, root: &'r Root) -> Option<&'r dyn Any> {
+//         (self.getter)(root)
+//     }
 
-    /// Get the TypeId of the Value type
-    pub fn value_type_id(&self) -> TypeId {
-        self.value_type_id
-    }
+//     /// Get the TypeId of the Value type
+//     pub fn value_type_id(&self) -> TypeId {
+//         self.value_type_id
+//     }
 
-    /// Try to downcast the result to a specific type
-    pub fn get_as<'a, Value: Any>(&self, root: &'a Root) -> Option<&'a Value> {
-        if self.value_type_id == TypeId::of::<Value>() {
-            self.get(root).and_then(|any| any.downcast_ref::<Value>())
-        } else {
-            None
-        }
-    }
+//     /// Try to downcast the result to a specific type
+//     pub fn get_as<'a, Value: Any>(&self, root: &'a Root) -> Option<&'a Value> {
+//         if self.value_type_id == TypeId::of::<Value>() {
+//             self.get(root).and_then(|any| any.downcast_ref::<Value>())
+//         } else {
+//             None
+//         }
+//     }
 
-    /// Get a human-readable name for the value type
-    pub fn kind_name(&self) -> String {
-        format!("{:?}", self.value_type_id)
-    }
+//     /// Get a human-readable name for the value type
+//     pub fn kind_name(&self) -> String {
+//         format!("{:?}", self.value_type_id)
+//     }
 
-    /// Adapt this keypath to work with Arc<Root> instead of Root
-    pub fn for_arc(&self) -> PKp<Arc<Root>> {
-        let getter = self.getter.clone();
-        let value_type_id = self.value_type_id;
+//     /// Adapt this keypath to work with Arc<Root> instead of Root
+//     pub fn for_arc(&self) -> PKp<Arc<Root>> {
+//         let getter = self.getter.clone();
+//         let value_type_id = self.value_type_id;
 
-        PKp {
-            getter: Rc::new(move |arc: &Arc<Root>| getter(arc.as_ref())),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |arc: &Arc<Root>| getter(arc.as_ref())),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Box<Root> instead of Root
-    pub fn for_box(&self) -> PKp<Box<Root>> {
-        let getter = self.getter.clone();
-        let value_type_id = self.value_type_id;
+//     /// Adapt this keypath to work with Box<Root> instead of Root
+//     pub fn for_box(&self) -> PKp<Box<Root>> {
+//         let getter = self.getter.clone();
+//         let value_type_id = self.value_type_id;
 
-        PKp {
-            getter: Rc::new(move |boxed: &Box<Root>| getter(boxed.as_ref())),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |boxed: &Box<Root>| getter(boxed.as_ref())),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Rc<Root> instead of Root
-    pub fn for_rc(&self) -> PKp<Rc<Root>> {
-        let getter = self.getter.clone();
-        let value_type_id = self.value_type_id;
+//     /// Adapt this keypath to work with Rc<Root> instead of Root
+//     pub fn for_rc(&self) -> PKp<Rc<Root>> {
+//         let getter = self.getter.clone();
+//         let value_type_id = self.value_type_id;
 
-        PKp {
-            getter: Rc::new(move |rc: &Rc<Root>| getter(rc.as_ref())),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |rc: &Rc<Root>| getter(rc.as_ref())),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Option<Root> instead of Root
-    pub fn for_option(&self) -> PKp<Option<Root>> {
-        let getter = self.getter.clone();
-        let value_type_id = self.value_type_id;
+//     /// Adapt this keypath to work with Option<Root> instead of Root
+//     pub fn for_option(&self) -> PKp<Option<Root>> {
+//         let getter = self.getter.clone();
+//         let value_type_id = self.value_type_id;
 
-        PKp {
-            getter: Rc::new(move |opt: &Option<Root>| opt.as_ref().and_then(|root| getter(root))),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |opt: &Option<Root>| opt.as_ref().and_then(|root| getter(root))),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Adapt this keypath to work with Result<Root, E> instead of Root
-    pub fn for_result<E>(&self) -> PKp<Result<Root, E>>
-    where
-        E: 'static,
-    {
-        let getter = self.getter.clone();
-        let value_type_id = self.value_type_id;
+//     /// Adapt this keypath to work with Result<Root, E> instead of Root
+//     pub fn for_result<E>(&self) -> PKp<Result<Root, E>>
+//     where
+//         E: 'static,
+//     {
+//         let getter = self.getter.clone();
+//         let value_type_id = self.value_type_id;
 
-        PKp {
-            getter: Rc::new(move |result: &Result<Root, E>| {
-                result.as_ref().ok().and_then(|root| getter(root))
-            }),
-            value_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |result: &Result<Root, E>| {
+//                 result.as_ref().ok().and_then(|root| getter(root))
+//             }),
+//             value_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Map the value through a transformation function
-    /// The mapped value must also implement Any for type erasure
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType, PKp};
-    /// struct User { name: String }
-    /// let user = User { name: "Akash".to_string() };
-    /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
-    /// let name_pkp = PKp::new(name_kp);
-    /// let len_pkp = name_pkp.map::<String, _, _>(|s| s.len());
-    /// assert_eq!(len_pkp.get_as::<usize>(&user), Some(&5));
-    /// ```
-    pub fn map<OrigValue, MappedValue, F>(&self, mapper: F) -> PKp<Root>
-    where
-        OrigValue: Any + 'static,
-        MappedValue: Any + 'static,
-        F: Fn(&OrigValue) -> MappedValue + 'static,
-    {
-        let orig_type_id = self.value_type_id;
-        let getter = self.getter.clone();
-        let mapped_type_id = TypeId::of::<MappedValue>();
+//     /// Map the value through a transformation function
+//     /// The mapped value must also implement Any for type erasure
+//     ///
+//     /// # Example
+//     /// ```
+//     /// use rust_key_paths::{Kp, KpType, PKp};
+//     /// struct User { name: String }
+//     /// let user = User { name: "Akash".to_string() };
+//     /// let name_kp = KpType::new(|u: &User| Some(&u.name), |_| None);
+//     /// let name_pkp = PKp::new(name_kp);
+//     /// let len_pkp = name_pkp.map::<String, _, _>(|s| s.len());
+//     /// assert_eq!(len_pkp.get_as::<usize>(&user), Some(&5));
+//     /// ```
+//     pub fn map<OrigValue, MappedValue, F>(&self, mapper: F) -> PKp<Root>
+//     where
+//         OrigValue: Any + 'static,
+//         MappedValue: Any + 'static,
+//         F: Fn(&OrigValue) -> MappedValue + 'static,
+//     {
+//         let orig_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
+//         let mapped_type_id = TypeId::of::<MappedValue>();
 
-        PKp {
-            getter: Rc::new(move |root: &Root| {
-                getter(root).and_then(|any_value| {
-                    // Verify the original type matches
-                    if orig_type_id == TypeId::of::<OrigValue>() {
-                        any_value.downcast_ref::<OrigValue>().map(|orig_val| {
-                            let mapped = mapper(orig_val);
-                            // Box the mapped value and return as &dyn Any
-                            // Note: This creates a new allocation
-                            Box::leak(Box::new(mapped)) as &dyn Any
-                        })
-                    } else {
-                        None
-                    }
-                })
-            }),
-            value_type_id: mapped_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+//         PKp {
+//             getter: Rc::new(move |root: &Root| {
+//                 getter(root).and_then(|any_value| {
+//                     // Verify the original type matches
+//                     if orig_type_id == TypeId::of::<OrigValue>() {
+//                         any_value.downcast_ref::<OrigValue>().map(|orig_val| {
+//                             let mapped = mapper(orig_val);
+//                             // Box the mapped value and return as &dyn Any
+//                             // Note: This creates a new allocation
+//                             Box::leak(Box::new(mapped)) as &dyn Any
+//                         })
+//                     } else {
+//                         None
+//                     }
+//                 })
+//             }),
+//             value_type_id: mapped_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
 
-    /// Filter the value based on a predicate with type checking
-    /// Returns None if the type doesn't match or predicate fails
-    ///
-    /// # Example
-    /// ```
-    /// use rust_key_paths::{Kp, KpType, PKp};
-    /// struct User { age: i32 }
-    /// let user = User { age: 30 };
-    /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
-    /// let age_pkp = PKp::new(age_kp);
-    /// let adult_pkp = age_pkp.filter::<i32, _>(|age| *age >= 18);
-    /// assert_eq!(adult_pkp.get_as::<i32>(&user), Some(&30));
-    /// ```
-    pub fn filter<Value, F>(&self, predicate: F) -> PKp<Root>
-    where
-        Value: Any + 'static,
-        F: Fn(&Value) -> bool + 'static,
-    {
-        let orig_type_id = self.value_type_id;
-        let getter = self.getter.clone();
+//     /// Filter the value based on a predicate with type checking
+//     /// Returns None if the type doesn't match or predicate fails
+//     ///
+//     /// # Example
+//     /// ```
+//     /// use rust_key_paths::{Kp, KpType, PKp};
+//     /// struct User { age: i32 }
+//     /// let user = User { age: 30 };
+//     /// let age_kp = KpType::new(|u: &User| Some(&u.age), |_| None);
+//     /// let age_pkp = PKp::new(age_kp);
+//     /// let adult_pkp = age_pkp.filter::<i32, _>(|age| *age >= 18);
+//     /// assert_eq!(adult_pkp.get_as::<i32>(&user), Some(&30));
+//     /// ```
+//     pub fn filter<Value, F>(&self, predicate: F) -> PKp<Root>
+//     where
+//         Value: Any + 'static,
+//         F: Fn(&Value) -> bool + 'static,
+//     {
+//         let orig_type_id = self.value_type_id;
+//         let getter = self.getter.clone();
 
-        PKp {
-            getter: Rc::new(move |root: &Root| {
-                getter(root).filter(|any_value| {
-                    // Type check and apply predicate
-                    if orig_type_id == TypeId::of::<Value>() {
-                        any_value
-                            .downcast_ref::<Value>()
-                            .map(|val| predicate(val))
-                            .unwrap_or(false)
-                    } else {
-                        false
-                    }
-                })
-            }),
-            value_type_id: orig_type_id,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
+//         PKp {
+//             getter: Rc::new(move |root: &Root| {
+//                 getter(root).filter(|any_value| {
+//                     // Type check and apply predicate
+//                     if orig_type_id == TypeId::of::<Value>() {
+//                         any_value
+//                             .downcast_ref::<Value>()
+//                             .map(|val| predicate(val))
+//                             .unwrap_or(false)
+//                     } else {
+//                         false
+//                     }
+//                 })
+//             }),
+//             value_type_id: orig_type_id,
+//             _phantom: std::marker::PhantomData,
+//         }
+//     }
+// }
 
-impl<Root> fmt::Debug for PKp<Root> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PKp")
-            .field("root_ty", &std::any::type_name::<Root>())
-            .field("value_type_id", &self.value_type_id)
-            .finish_non_exhaustive()
-    }
-}
+// impl<Root> fmt::Debug for PKp<Root> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("PKp")
+//             .field("root_ty", &std::any::type_name::<Root>())
+//             .field("value_type_id", &self.value_type_id)
+//             .finish_non_exhaustive()
+//     }
+// }
 
-impl<Root> fmt::Display for PKp<Root> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PKp<{}, value_type_id={:?}>",
-            std::any::type_name::<Root>(),
-            self.value_type_id
-        )
-    }
-}
+// impl<Root> fmt::Display for PKp<Root> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(
+//             f,
+//             "PKp<{}, value_type_id={:?}>",
+//             std::any::type_name::<Root>(),
+//             self.value_type_id
+//         )
+//     }
+// }
 
 // ========== ANY KEYPATHS (Hide Both Root and Value Types) ==========
-
-pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+pub trait KpTrait<R, V>: KpReadable<R, V> + KPWritable<R, V> {
     fn type_id_of_root() -> TypeId
     where
         R: 'static,
@@ -1003,416 +1002,408 @@ pub trait KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
     {
         std::any::TypeId::of::<V>()
     }
-    fn get(&self, root: Root) -> Option<Value>;
-    fn get_mut(&self, root: MutRoot) -> Option<MutValue>;
-    fn then<SV, SubValue, MutSubValue, G2, S2>(
+
+    fn then<SV, G2, S2>(
         self,
-        next: Kp<V, SV, Value, SubValue, MutValue, MutSubValue, G2, S2>,
+        next: Kp<V, SV, G2, S2>,
     ) -> Kp<
         R,
         SV,
-        Root,
-        SubValue,
-        MutRoot,
-        MutSubValue,
-        impl Fn(Root) -> Option<SubValue>,
-        impl Fn(MutRoot) -> Option<MutSubValue>,
+        impl for<'r> Fn(&'r R) -> Option<&'r SV>,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut SV>,
     >
     where
-        Self: Sized,
-        Root: std::borrow::Borrow<R>,
-        Value: std::borrow::Borrow<V>,
-        MutRoot: std::borrow::BorrowMut<R>,
-        MutValue: std::borrow::BorrowMut<V>,
-        SubValue: std::borrow::Borrow<SV>,
-        MutSubValue: std::borrow::BorrowMut<SV>,
-        G2: Fn(Value) -> Option<SubValue>,
-        S2: Fn(MutValue) -> Option<MutSubValue>,;
+        G2: for<'r> Fn(&'r V) -> Option<&'r SV>,
+        S2: for<'r> Fn(&'r mut V) -> Option<&'r mut SV>,
+        for<'r> V:  'r;
 }
 
-pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
-    /// Chain with a sync [crate::lock::LockKp]. Use `.get(root)` / `.get_mut(root)` on the returned keypath.
-    fn then_lock<
-        Lock,
-        Mid,
-        V2,
-        LockValue,
-        MidValue,
-        Value2,
-        MutLock,
-        MutMid,
-        MutValue2,
-        G1,
-        S1,
-        L,
-        G2,
-        S2,
-    >(
-        self,
-        lock_kp: crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    ) -> crate::lock::KpThenLockKp<
-        R,
-        V,
-        V2,
-        Root,
-        Value,
-        Value2,
-        MutRoot,
-        MutValue,
-        MutValue2,
-        Self,
-        crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    >
-    where
-        V: 'static + Clone,
-        V2: 'static,
-        Value: std::borrow::Borrow<V>,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue: std::borrow::BorrowMut<V>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        LockValue: std::borrow::Borrow<Lock>,
-        MidValue: std::borrow::Borrow<Mid>,
-        MutLock: std::borrow::BorrowMut<Lock>,
-        MutMid: std::borrow::BorrowMut<Mid>,
-        G1: Fn(Value) -> Option<LockValue>,
-        S1: Fn(MutValue) -> Option<MutLock>,
-        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
-        G2: Fn(MidValue) -> Option<Value2>,
-        S2: Fn(MutMid) -> Option<MutValue2>,
-        Self: Sized;
-
-    /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
-    #[cfg(feature = "pin_project")]
-    fn then_pin_future<Struct, Output, L>(
-        self,
-        pin_fut: L,
-    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
-    where
-        Struct: Unpin + 'static,
-        Output: 'static,
-        Value: std::borrow::Borrow<Struct>,
-        MutValue: std::borrow::BorrowMut<Struct>,
-        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
-        Self: Sized;
-
-    /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
-    fn then_async<AsyncKp>(
-        self,
-        async_kp: AsyncKp,
-    ) -> crate::async_lock::KpThenAsyncKeyPath<
-        R,
-        V,
-        <AsyncKp::Value as KeyPathValueTarget>::Target,
-        Root,
-        Value,
-        AsyncKp::Value,
-        MutRoot,
-        MutValue,
-        AsyncKp::MutValue,
-        Self,
-        AsyncKp,
-    >
-    where
-        Value: std::borrow::Borrow<V>,
-        MutValue: std::borrow::BorrowMut<V>,
-        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
-        AsyncKp::Value: KeyPathValueTarget
-            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
-        Self: Sized;
+pub trait KpReadable<R, V> {
+    fn get<'a>(&self, root: &'a R) -> Option<&'a V>;
+}
+pub trait KPWritable<R, V> {
+    fn set<'a>(&self, root: &'a mut R) -> Option<&'a mut V>;
 }
 
-impl<R, V, Root, Value, MutRoot, MutValue, G, S> ChainExt<R, V, Root, Value, MutRoot, MutValue>
-    for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+// pub trait ChainExt<R, V, Root, Value, MutRoot, MutValue> {
+//     /// Chain with a sync [crate::lock::LockKp]. Use `.get(root)` / `.get_mut(root)` on the returned keypath.
+//     fn then_lock<
+//         Lock,
+//         Mid,
+//         V2,
+//         LockValue,
+//         MidValue,
+//         Value2,
+//         MutLock,
+//         MutMid,
+//         MutValue2,
+//         G1,
+//         S1,
+//         L,
+//         G2,
+//         S2,
+//     >(
+//         self,
+//         lock_kp: crate::lock::LockKp<
+//             V,
+//             Lock,
+//             Mid,
+//             V2,
+//             Value,
+//             LockValue,
+//             MidValue,
+//             Value2,
+//             MutValue,
+//             MutLock,
+//             MutMid,
+//             MutValue2,
+//             G1,
+//             S1,
+//             L,
+//             G2,
+//             S2,
+//         >,
+//     ) -> crate::lock::KpThenLockKp<
+//         R,
+//         V,
+//         V2,
+//         Root,
+//         Value,
+//         Value2,
+//         MutRoot,
+//         MutValue,
+//         MutValue2,
+//         Self,
+//         crate::lock::LockKp<
+//             V,
+//             Lock,
+//             Mid,
+//             V2,
+//             Value,
+//             LockValue,
+//             MidValue,
+//             Value2,
+//             MutValue,
+//             MutLock,
+//             MutMid,
+//             MutValue2,
+//             G1,
+//             S1,
+//             L,
+//             G2,
+//             S2,
+//         >,
+//     >
+//     where
+//         V: 'static + Clone,
+//         V2: 'static,
+//         Value: std::borrow::Borrow<V>,
+//         Value2: std::borrow::Borrow<V2>,
+//         MutValue: std::borrow::BorrowMut<V>,
+//         MutValue2: std::borrow::BorrowMut<V2>,
+//         LockValue: std::borrow::Borrow<Lock>,
+//         MidValue: std::borrow::Borrow<Mid>,
+//         MutLock: std::borrow::BorrowMut<Lock>,
+//         MutMid: std::borrow::BorrowMut<Mid>,
+//         G1: Fn(Value) -> Option<LockValue>,
+//         S1: Fn(MutValue) -> Option<MutLock>,
+//         L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
+//         G2: Fn(MidValue) -> Option<Value2>,
+//         S2: Fn(MutMid) -> Option<MutValue2>,
+//         Self: Sized;
+
+//     /// Chain with a #[pin] Future field await (pin_project pattern). Use `.get_mut(&mut root).await` on the returned keypath.
+//     #[cfg(feature = "pin_project")]
+//     fn then_pin_future<Struct, Output, L>(
+//         self,
+//         pin_fut: L,
+//     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
+//     where
+//         Struct: Unpin + 'static,
+//         Output: 'static,
+//         Value: std::borrow::Borrow<Struct>,
+//         MutValue: std::borrow::BorrowMut<Struct>,
+//         L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+//         Self: Sized;
+
+//     /// Chain with an async keypath (e.g. [crate::async_lock::AsyncLockKp]). Use `.get(&root).await` on the returned keypath.
+//     fn then_async<AsyncKp>(
+//         self,
+//         async_kp: AsyncKp,
+//     ) -> crate::async_lock::KpThenAsyncKeyPath<
+//         R,
+//         V,
+//         <AsyncKp::Value as KeyPathValueTarget>::Target,
+//         Root,
+//         Value,
+//         AsyncKp::Value,
+//         MutRoot,
+//         MutValue,
+//         AsyncKp::MutValue,
+//         Self,
+//         AsyncKp,
+//     >
+//     where
+//         Value: std::borrow::Borrow<V>,
+//         MutValue: std::borrow::BorrowMut<V>,
+//         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
+//         AsyncKp::Value: KeyPathValueTarget
+//             + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+//         AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+//         <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
+//         Self: Sized;
+// }
+
+// impl<R, V, Root, Value, MutRoot, MutValue, G, S> ChainExt<R, V, Root, Value, MutRoot, MutValue>
+//     for Kp<R, V, Root, Value, MutRoot, MutValue, G, S>
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+// {
+//     fn then_lock<
+//         Lock,
+//         Mid,
+//         V2,
+//         LockValue,
+//         MidValue,
+//         Value2,
+//         MutLock,
+//         MutMid,
+//         MutValue2,
+//         G1,
+//         S1,
+//         L,
+//         G2,
+//         S2,
+//     >(
+//         self,
+//         lock_kp: crate::lock::LockKp<
+//             V,
+//             Lock,
+//             Mid,
+//             V2,
+//             Value,
+//             LockValue,
+//             MidValue,
+//             Value2,
+//             MutValue,
+//             MutLock,
+//             MutMid,
+//             MutValue2,
+//             G1,
+//             S1,
+//             L,
+//             G2,
+//             S2,
+//         >,
+//     ) -> crate::lock::KpThenLockKp<
+//         R,
+//         V,
+//         V2,
+//         Root,
+//         Value,
+//         Value2,
+//         MutRoot,
+//         MutValue,
+//         MutValue2,
+//         Self,
+//         crate::lock::LockKp<
+//             V,
+//             Lock,
+//             Mid,
+//             V2,
+//             Value,
+//             LockValue,
+//             MidValue,
+//             Value2,
+//             MutValue,
+//             MutLock,
+//             MutMid,
+//             MutValue2,
+//             G1,
+//             S1,
+//             L,
+//             G2,
+//             S2,
+//         >,
+//     >
+//     where
+//         V: 'static + Clone,
+//         V2: 'static,
+//         Value: std::borrow::Borrow<V>,
+//         Value2: std::borrow::Borrow<V2>,
+//         MutValue: std::borrow::BorrowMut<V>,
+//         MutValue2: std::borrow::BorrowMut<V2>,
+//         LockValue: std::borrow::Borrow<Lock>,
+//         MidValue: std::borrow::Borrow<Mid>,
+//         MutLock: std::borrow::BorrowMut<Lock>,
+//         MutMid: std::borrow::BorrowMut<Mid>,
+//         G1: Fn(Value) -> Option<LockValue>,
+//         S1: Fn(MutValue) -> Option<MutLock>,
+//         L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
+//         G2: Fn(MidValue) -> Option<Value2>,
+//         S2: Fn(MutMid) -> Option<MutValue2>,
+//     {
+//         let first = self;
+//         let second = lock_kp;
+
+//         crate::lock::KpThenLockKp {
+//             first: first,
+//             second: second,
+//             _p: std::marker::PhantomData,
+//         }
+//     }
+
+//     #[cfg(feature = "pin_project")]
+//     fn then_pin_future<Struct, Output, L>(
+//         self,
+//         pin_fut: L,
+//     ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
+//     where
+//         Struct: Unpin + 'static,
+//         Output: 'static,
+//         Value: std::borrow::Borrow<Struct>,
+//         MutValue: std::borrow::BorrowMut<Struct>,
+//         L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
+//     {
+//         let first = self;
+//         let second = pin_fut;
+
+//         crate::pin::KpThenPinFuture {
+//             first: first,
+//             second: second,
+//             _p: std::marker::PhantomData,
+//         }
+//     }
+
+//     fn then_async<AsyncKp>(
+//         self,
+//         async_kp: AsyncKp,
+//     ) -> crate::async_lock::KpThenAsyncKeyPath<
+//         R,
+//         V,
+//         <AsyncKp::Value as KeyPathValueTarget>::Target,
+//         Root,
+//         Value,
+//         AsyncKp::Value,
+//         MutRoot,
+//         MutValue,
+//         AsyncKp::MutValue,
+//         Self,
+//         AsyncKp,
+//     >
+//     where
+//         Value: std::borrow::Borrow<V>,
+//         MutValue: std::borrow::BorrowMut<V>,
+//         AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
+//         AsyncKp::Value: KeyPathValueTarget
+//             + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+//         AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
+//         <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
+//     {
+//         let first = self;
+//         let second = async_kp;
+
+//         crate::async_lock::KpThenAsyncKeyPath {
+//             first: first,
+//             second: second,
+//             _p: std::marker::PhantomData,
+//         }
+//     }
+// }
+
+// pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
+//     /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
+//     fn get_optional(&self, root: Option<Root>) -> Option<Value>;
+//     //  {
+//     //     root.and_then(|r| self.get(r))
+//     // }
+
+//     /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
+//     fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>;
+//     // {
+//     //     root.and_then(|r| self.get_mut(r))
+//     // }
+
+//     /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
+//     fn get_or_else<F>(&self, root: Root, f: F) -> Value
+//     where
+//         F: FnOnce() -> Value;
+//     // {
+//     //     self.get(root).unwrap_or_else(f)
+//     // }
+
+//     /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
+//     #[inline]
+//     fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
+//     where
+//         F: FnOnce() -> MutValue;
+//     // {
+//     //     self.get_mut(root).unwrap_or_else(f)
+//     // }
+// }
+
+// pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
+// where
+//     Root: std::borrow::Borrow<R>,
+//     Value: std::borrow::Borrow<V>,
+//     MutRoot: std::borrow::BorrowMut<R>,
+//     MutValue: std::borrow::BorrowMut<V>,
+//     G: Fn(Root) -> Option<Value>,
+//     S: Fn(MutRoot) -> Option<MutValue>,
+// {
+//     fn for_arc<'b>(
+//         &self,
+//     ) -> Kp<
+//         std::sync::Arc<R>,
+//         V,
+//         std::sync::Arc<R>,
+//         Value,
+//         std::sync::Arc<R>,
+//         MutValue,
+//         impl Fn(std::sync::Arc<R>) -> Option<Value>,
+//         impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
+//     >
+//     where
+//         R: 'b,
+//         V: 'b,
+//         Root: for<'a> From<&'a R>,
+//         MutRoot: for<'a> From<&'a mut R>;
+
+//     fn for_box<'a>(
+//         &self,
+//     ) -> Kp<
+//         Box<R>,
+//         V,
+//         Box<R>,
+//         Value,
+//         Box<R>,
+//         MutValue,
+//         impl Fn(Box<R>) -> Option<Value>,
+//         impl Fn(Box<R>) -> Option<MutValue>,
+//     >
+//     where
+//         R: 'a,
+//         V: 'a,
+//         Root: for<'b> From<&'b R>,
+//         MutRoot: for<'b> From<&'b mut R>;
+
+//     /// set fn is converting fn pointer to Fn closure
+//     fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue>;
+
+//     /// get fn is converting fn pointer to Fn closure
+//     fn into_get(self) -> impl Fn(Root) -> Option<Value>;
+// }
+
+pub trait HofTrait<R, V, G, S>:
+    KpTrait<R, V>
 where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    fn then_lock<
-        Lock,
-        Mid,
-        V2,
-        LockValue,
-        MidValue,
-        Value2,
-        MutLock,
-        MutMid,
-        MutValue2,
-        G1,
-        S1,
-        L,
-        G2,
-        S2,
-    >(
-        self,
-        lock_kp: crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    ) -> crate::lock::KpThenLockKp<
-        R,
-        V,
-        V2,
-        Root,
-        Value,
-        Value2,
-        MutRoot,
-        MutValue,
-        MutValue2,
-        Self,
-        crate::lock::LockKp<
-            V,
-            Lock,
-            Mid,
-            V2,
-            Value,
-            LockValue,
-            MidValue,
-            Value2,
-            MutValue,
-            MutLock,
-            MutMid,
-            MutValue2,
-            G1,
-            S1,
-            L,
-            G2,
-            S2,
-        >,
-    >
-    where
-        V: 'static + Clone,
-        V2: 'static,
-        Value: std::borrow::Borrow<V>,
-        Value2: std::borrow::Borrow<V2>,
-        MutValue: std::borrow::BorrowMut<V>,
-        MutValue2: std::borrow::BorrowMut<V2>,
-        LockValue: std::borrow::Borrow<Lock>,
-        MidValue: std::borrow::Borrow<Mid>,
-        MutLock: std::borrow::BorrowMut<Lock>,
-        MutMid: std::borrow::BorrowMut<Mid>,
-        G1: Fn(Value) -> Option<LockValue>,
-        S1: Fn(MutValue) -> Option<MutLock>,
-        L: crate::lock::LockAccess<Lock, MidValue> + crate::lock::LockAccess<Lock, MutMid>,
-        G2: Fn(MidValue) -> Option<Value2>,
-        S2: Fn(MutMid) -> Option<MutValue2>,
-    {
-        let first = self;
-        let second = lock_kp;
-
-        crate::lock::KpThenLockKp {
-            first: first,
-            second: second,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    #[cfg(feature = "pin_project")]
-    fn then_pin_future<Struct, Output, L>(
-        self,
-        pin_fut: L,
-    ) -> crate::pin::KpThenPinFuture<R, Struct, Output, Root, MutRoot, Value, MutValue, Self, L>
-    where
-        Struct: Unpin + 'static,
-        Output: 'static,
-        Value: std::borrow::Borrow<Struct>,
-        MutValue: std::borrow::BorrowMut<Struct>,
-        L: crate::pin::PinFutureAwaitLike<Struct, Output> + Sync,
-    {
-        let first = self;
-        let second = pin_fut;
-
-        crate::pin::KpThenPinFuture {
-            first: first,
-            second: second,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    fn then_async<AsyncKp>(
-        self,
-        async_kp: AsyncKp,
-    ) -> crate::async_lock::KpThenAsyncKeyPath<
-        R,
-        V,
-        <AsyncKp::Value as KeyPathValueTarget>::Target,
-        Root,
-        Value,
-        AsyncKp::Value,
-        MutRoot,
-        MutValue,
-        AsyncKp::MutValue,
-        Self,
-        AsyncKp,
-    >
-    where
-        Value: std::borrow::Borrow<V>,
-        MutValue: std::borrow::BorrowMut<V>,
-        AsyncKp: crate::async_lock::AsyncKeyPathLike<Value, MutValue>,
-        AsyncKp::Value: KeyPathValueTarget
-            + std::borrow::Borrow<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        AsyncKp::MutValue: std::borrow::BorrowMut<<AsyncKp::Value as KeyPathValueTarget>::Target>,
-        <AsyncKp::Value as KeyPathValueTarget>::Target: 'static,
-    {
-        let first = self;
-        let second = async_kp;
-
-        crate::async_lock::KpThenAsyncKeyPath {
-            first: first,
-            second: second,
-            _p: std::marker::PhantomData,
-        }
-    }
-}
-
-pub trait AccessorTrait<R, V, Root, Value, MutRoot, MutValue, G, S> {
-    /// Like [get](Kp::get), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the getter.
-    fn get_optional(&self, root: Option<Root>) -> Option<Value>;
-    //  {
-    //     root.and_then(|r| self.get(r))
-    // }
-
-    /// Like [get_mut](Kp::get_mut), but takes an optional root: returns `None` if `root` is `None`, otherwise the result of the setter.
-    fn get_mut_optional(&self, root: Option<MutRoot>) -> Option<MutValue>;
-    // {
-    //     root.and_then(|r| self.get_mut(r))
-    // }
-
-    /// Returns the value if the keypath succeeds, otherwise calls `f` and returns its result.
-    fn get_or_else<F>(&self, root: Root, f: F) -> Value
-    where
-        F: FnOnce() -> Value;
-    // {
-    //     self.get(root).unwrap_or_else(f)
-    // }
-
-    /// Returns the mutable value if the keypath succeeds, otherwise calls `f` and returns its result.
-    #[inline]
-    fn get_mut_or_else<F>(&self, root: MutRoot, f: F) -> MutValue
-    where
-        F: FnOnce() -> MutValue;
-    // {
-    //     self.get_mut(root).unwrap_or_else(f)
-    // }
-}
-
-pub trait CoercionTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
-{
-    fn for_arc<'b>(
-        &self,
-    ) -> Kp<
-        std::sync::Arc<R>,
-        V,
-        std::sync::Arc<R>,
-        Value,
-        std::sync::Arc<R>,
-        MutValue,
-        impl Fn(std::sync::Arc<R>) -> Option<Value>,
-        impl Fn(std::sync::Arc<R>) -> Option<MutValue>,
-    >
-    where
-        R: 'b,
-        V: 'b,
-        Root: for<'a> From<&'a R>,
-        MutRoot: for<'a> From<&'a mut R>;
-
-    fn for_box<'a>(
-        &self,
-    ) -> Kp<
-        Box<R>,
-        V,
-        Box<R>,
-        Value,
-        Box<R>,
-        MutValue,
-        impl Fn(Box<R>) -> Option<Value>,
-        impl Fn(Box<R>) -> Option<MutValue>,
-    >
-    where
-        R: 'a,
-        V: 'a,
-        Root: for<'b> From<&'b R>,
-        MutRoot: for<'b> From<&'b mut R>;
-
-    /// set fn is converting fn pointer to Fn closure
-    fn into_set(self) -> impl Fn(MutRoot) -> Option<MutValue>;
-
-    /// get fn is converting fn pointer to Fn closure
-    fn into_get(self) -> impl Fn(Root) -> Option<Value>;
-}
-
-pub trait HofTrait<R, V, Root, Value, MutRoot, MutValue, G, S>:
-    KpTrait<R, V, Root, Value, MutRoot, MutValue, G, S>
-where
-    Root: std::borrow::Borrow<R>,
-    Value: std::borrow::Borrow<V>,
-    MutRoot: std::borrow::BorrowMut<R>,
-    MutValue: std::borrow::BorrowMut<V>,
-    G: Fn(Root) -> Option<Value>,
-    S: Fn(MutRoot) -> Option<MutValue>,
+    G: for<'r> Fn(&'r R) -> Option<&'r V>,
+    S: for<'r> Fn(&'r mut R) -> Option<&'r mut V>,
 {
     // /// Map the value through a transformation function
     // /// Returns a new keypath that transforms the value when accessed
@@ -1469,25 +1460,20 @@ where
     ) -> Kp<
         R,
         MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue> + '_,
-        impl Fn(MutRoot) -> Option<MappedValue> + '_,
+        impl for<'r> Fn(&'r R) -> Option<&'r MappedValue>,
+        impl for<'r> Fn(&'r mut R) -> Option<&'r mut MappedValue>,
     >
     where
-        F: Fn(&V) -> MappedValue + Copy + 'static,
-        MappedValue: 'static,
+        F: Fn(&V) -> &MappedValue,
     {
         Kp::new(
-            move |root: Root| {
+            move |root: &R| {
                 self.get(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
                 })
             },
-            move |root: MutRoot| {
+            move |root: &mut R| {
                 self.get_mut(root).map(|value| {
                     let v: &V = value.borrow();
                     mapper(v)
@@ -1496,272 +1482,266 @@ where
         )
     }
 
-    /// Filter the value based on a predicate.
-    fn filter<F>(
-        &self,
-        predicate: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value> + '_,
-        impl Fn(MutRoot) -> Option<MutValue> + '_,
-    >
-    where
-        F: Fn(&V) -> bool + Copy + 'static,
-    {
-        Kp::new(
-             move |root: Root| {
-                self.get(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-             move |root: MutRoot| {
-                self.get_mut(root).filter(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-            },
-        )
-    }
+    // /// Filter the value based on a predicate.
+    // fn filter<F>(
+    //     &self,
+    //     predicate: F,
+    // ) -> Kp<
+    //     R,
+    //     V,
+    //     impl for<'r> Fn(&'r R) -> Option<&'r V>,
+    //     impl for<'r> Fn(&'r mut R) -> Option<&'r V>,
+    // >
+    // where
+    //     F: Fn(&V) -> bool + Copy + 'static,
+    // {
+    //     Kp::new(
+    //          move |root: &R| {
+    //             self.get(root).filter(|value| {
+    //                 predicate(value)
+    //             })
+    //         },
+    //          move |root: &mut R| {
+    //             self.set(root).filter(|value| {
+    //                 predicate(value)
+    //             })
+    //         },
+    //     )
+    // }
 
-    /// Map and flatten when mapper returns an Option.
-    fn filter_map<MappedValue, F>(
-        &self,
-        mapper: F,
-    ) -> Kp<
-        R,
-        MappedValue,
-        Root,
-        MappedValue,
-        MutRoot,
-        MappedValue,
-        impl Fn(Root) -> Option<MappedValue> + '_,
-        impl Fn(MutRoot) -> Option<MappedValue> + '_,
-    >
-    where
-        F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                self.get(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-            move |root: MutRoot| {
-                self.get_mut(root).and_then(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v)
-                })
-            },
-        )
-    }
+    // /// Map and flatten when mapper returns an Option.
+    // fn filter_map<MappedValue, F>(
+    //     &self,
+    //     mapper: F,
+    // ) -> Kp<
+    //     R,
+    //     MappedValue,
+    //     Root,
+    //     MappedValue,
+    //     MutRoot,
+    //     MappedValue,
+    //     impl Fn(Root) -> Option<MappedValue> + '_,
+    //     impl Fn(MutRoot) -> Option<MappedValue> + '_,
+    // >
+    // where
+    //     F: Fn(&V) -> Option<MappedValue> + Copy + 'static,
+    // {
+    //     Kp::new(
+    //         move |root: Root| {
+    //             self.get(root).and_then(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //         move |root: MutRoot| {
+    //             self.get_mut(root).and_then(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v)
+    //             })
+    //         },
+    //     )
+    // }
 
-    /// Apply a function for its side effects and return the value.
-    fn inspect<F>(
-        &self,
-        inspector: F,
-    ) -> Kp<
-        R,
-        V,
-        Root,
-        Value,
-        MutRoot,
-        MutValue,
-        impl Fn(Root) -> Option<Value> + '_,
-        impl Fn(MutRoot) -> Option<MutValue> + '_,
-    >
-    where
-        F: Fn(&V) + Copy + 'static,
-    {
-        Kp::new(
-            move |root: Root| {
-                self.get(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-            move |root: MutRoot| {
-                self.get_mut(root).map(|value| {
-                    let v: &V = value.borrow();
-                    inspector(v);
-                    value
-                })
-            },
-        )
-    }
+    // /// Apply a function for its side effects and return the value.
+    // fn inspect<F>(
+    //     &self,
+    //     inspector: F,
+    // ) -> Kp<
+    //     R,
+    //     V,
+    //     Root,
+    //     Value,
+    //     MutRoot,
+    //     MutValue,
+    //     impl Fn(Root) -> Option<Value> + '_,
+    //     impl Fn(MutRoot) -> Option<MutValue> + '_,
+    // >
+    // where
+    //     F: Fn(&V) + Copy + 'static,
+    // {
+    //     Kp::new(
+    //         move |root: Root| {
+    //             self.get(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 inspector(v);
+    //                 value
+    //             })
+    //         },
+    //         move |root: MutRoot| {
+    //             self.get_mut(root).map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 inspector(v);
+    //                 value
+    //             })
+    //         },
+    //     )
+    // }
 
-    /// Flat map - maps to an iterator and flattens.
-    fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
-    where
-        F: Fn(&V) -> I + 'static,
-        I: IntoIterator<Item = Item>,
-    {
-        move |root: Root| {
-            self.get(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    mapper(v).into_iter().collect()
-                })
-                .unwrap_or_else(Vec::new)
-        }
-    }
+    // /// Flat map - maps to an iterator and flattens.
+    // fn flat_map<I, Item, F>(&self, mapper: F) -> impl Fn(Root) -> Vec<Item> + '_
+    // where
+    //     F: Fn(&V) -> I + 'static,
+    //     I: IntoIterator<Item = Item>,
+    // {
+    //     move |root: Root| {
+    //         self.get(root)
+    //             .map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 mapper(v).into_iter().collect()
+    //             })
+    //             .unwrap_or_else(Vec::new)
+    //     }
+    // }
 
-    /// Fold/reduce the value using an accumulator function.
-    fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
-    where
-        F: Fn(Acc, &V) -> Acc + 'static,
-        Acc: Copy + 'static,
-    {
-        move |root: Root| {
-            self.get(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    folder(init, v)
-                })
-                .unwrap_or(init)
-        }
-    }
+    // /// Fold/reduce the value using an accumulator function.
+    // fn fold_value<Acc, F>(&self, init: Acc, folder: F) -> impl Fn(Root) -> Acc + '_
+    // where
+    //     F: Fn(Acc, &V) -> Acc + 'static,
+    //     Acc: Copy + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root)
+    //             .map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 folder(init, v)
+    //             })
+    //             .unwrap_or(init)
+    //     }
+    // }
 
-    /// Check if any element satisfies a predicate.
-    fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
-    where
-        F: Fn(&V) -> bool + 'static,
-    {
-        move |root: Root| {
-            self.get(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(false)
-        }
-    }
+    // /// Check if any element satisfies a predicate.
+    // fn any<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    // where
+    //     F: Fn(&V) -> bool + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root)
+    //             .map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 predicate(v)
+    //             })
+    //             .unwrap_or(false)
+    //     }
+    // }
 
-    /// Check if all elements satisfy a predicate.
-    fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
-    where
-        F: Fn(&V) -> bool + 'static,
-    {
-        move |root: Root| {
-            self.get(root)
-                .map(|value| {
-                    let v: &V = value.borrow();
-                    predicate(v)
-                })
-                .unwrap_or(true)
-        }
-    }
+    // /// Check if all elements satisfy a predicate.
+    // fn all<F>(&self, predicate: F) -> impl Fn(Root) -> bool + '_
+    // where
+    //     F: Fn(&V) -> bool + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root)
+    //             .map(|value| {
+    //                 let v: &V = value.borrow();
+    //                 predicate(v)
+    //             })
+    //             .unwrap_or(true)
+    //     }
+    // }
 
-    /// Count elements in a collection value.
-    fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
-    where
-        F: Fn(&V) -> usize + 'static,
-    {
-        move |root: Root| {
-            self.get(root).map(|value| {
-                let v: &V = value.borrow();
-                counter(v)
-            })
-        }
-    }
+    // /// Count elements in a collection value.
+    // fn count_items<F>(&self, counter: F) -> impl Fn(Root) -> Option<usize> + '_
+    // where
+    //     F: Fn(&V) -> usize + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).map(|value| {
+    //             let v: &V = value.borrow();
+    //             counter(v)
+    //         })
+    //     }
+    // }
 
-    /// Find first element matching predicate in a collection value.
-    fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
-    where
-        F: Fn(&V) -> Option<Item> + 'static,
-    {
-        move |root: Root| {
-            self.get(root).and_then(|value| {
-                let v: &V = value.borrow();
-                finder(v)
-            })
-        }
-    }
+    // /// Find first element matching predicate in a collection value.
+    // fn find_in<Item, F>(&self, finder: F) -> impl Fn(Root) -> Option<Item> + '_
+    // where
+    //     F: Fn(&V) -> Option<Item> + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).and_then(|value| {
+    //             let v: &V = value.borrow();
+    //             finder(v)
+    //         })
+    //     }
+    // }
 
-    /// Take first N elements from a collection value.
-    fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
-    where
-        F: Fn(&V, usize) -> Output + 'static,
-    {
-        move |root: Root| {
-            self.get(root).map(|value| {
-                let v: &V = value.borrow();
-                taker(v, n)
-            })
-        }
-    }
+    // /// Take first N elements from a collection value.
+    // fn take<Output, F>(&self, n: usize, taker: F) -> impl Fn(Root) -> Option<Output> + '_
+    // where
+    //     F: Fn(&V, usize) -> Output + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).map(|value| {
+    //             let v: &V = value.borrow();
+    //             taker(v, n)
+    //         })
+    //     }
+    // }
 
-    /// Skip first N elements from a collection value.
-    fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
-    where
-        F: Fn(&V, usize) -> Output + 'static,
-    {
-        move |root: Root| {
-            self.get(root).map(|value| {
-                let v: &V = value.borrow();
-                skipper(v, n)
-            })
-        }
-    }
+    // /// Skip first N elements from a collection value.
+    // fn skip<Output, F>(&self, n: usize, skipper: F) -> impl Fn(Root) -> Option<Output> + '_
+    // where
+    //     F: Fn(&V, usize) -> Output + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).map(|value| {
+    //             let v: &V = value.borrow();
+    //             skipper(v, n)
+    //         })
+    //     }
+    // }
 
-    /// Partition a collection value into two groups based on predicate.
-    fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
-    where
-        F: Fn(&V) -> Output + 'static,
-    {
-        move |root: Root| {
-            self.get(root).map(|value| {
-                let v: &V = value.borrow();
-                partitioner(v)
-            })
-        }
-    }
+    // /// Partition a collection value into two groups based on predicate.
+    // fn partition_value<Output, F>(&self, partitioner: F) -> impl Fn(Root) -> Option<Output> + '_
+    // where
+    //     F: Fn(&V) -> Output + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).map(|value| {
+    //             let v: &V = value.borrow();
+    //             partitioner(v)
+    //         })
+    //     }
+    // }
 
-    /// Get min value from a collection.
-    fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
-    where
-        F: Fn(&V) -> Option<Item> + 'static,
-    {
-        move |root: Root| {
-            self.get(root).and_then(|value| {
-                let v: &V = value.borrow();
-                min_fn(v)
-            })
-        }
-    }
+    // /// Get min value from a collection.
+    // fn min_value<Item, F>(&self, min_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    // where
+    //     F: Fn(&V) -> Option<Item> + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).and_then(|value| {
+    //             let v: &V = value.borrow();
+    //             min_fn(v)
+    //         })
+    //     }
+    // }
 
-    /// Get max value from a collection.
-    fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
-    where
-        F: Fn(&V) -> Option<Item> + 'static,
-    {
-        move |root: Root| {
-            self.get(root).and_then(|value| {
-                let v: &V = value.borrow();
-                max_fn(v)
-            })
-        }
-    }
+    // /// Get max value from a collection.
+    // fn max_value<Item, F>(&self, max_fn: F) -> impl Fn(Root) -> Option<Item> + '_
+    // where
+    //     F: Fn(&V) -> Option<Item> + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).and_then(|value| {
+    //             let v: &V = value.borrow();
+    //             max_fn(v)
+    //         })
+    //     }
+    // }
 
-    /// Sum numeric values in a collection.
-    fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
-    where
-        F: Fn(&V) -> Sum + 'static,
-    {
-        move |root: Root| {
-            self.get(root).map(|value| {
-                let v: &V = value.borrow();
-                sum_fn(v)
-            })
-        }
-    }
+    // /// Sum numeric values in a collection.
+    // fn sum_value<Sum, F>(&self, sum_fn: F) -> impl Fn(Root) -> Option<Sum> + '_
+    // where
+    //     F: Fn(&V) -> Sum + 'static,
+    // {
+    //     move |root: Root| {
+    //         self.get(root).map(|value| {
+    //             let v: &V = value.borrow();
+    //             sum_fn(v)
+    //         })
+    //     }
+    // }
 
     // /// Zip two keypaths on the same root; get_mut returns None.
     // fn zip<V2, Value2, MutValue2, G2, S2>(
