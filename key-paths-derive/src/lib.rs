@@ -3352,7 +3352,9 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                                 (WrapperKind::OptionHashMap, Some(inner_ty)) => {
                                     let snake_at = format_ident!("{}_at", snake);
-                                    if let Some((key_ty, _)) = extract_map_key_value_through_option(field_ty) {
+                                    if let Some((key_ty, _)) =
+                                        extract_map_key_value_through_option(field_ty)
+                                    {
                                         tokens.extend(quote! {
                                             #[inline(always)]
                                             pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {
@@ -3405,7 +3407,9 @@ pub fn derive_keypaths(input: TokenStream) -> TokenStream {
                                 }
                                 (WrapperKind::OptionBTreeMap, Some(inner_ty)) => {
                                     let snake_at = format_ident!("{}_at", snake);
-                                    if let Some((key_ty, _)) = extract_map_key_value_through_option(field_ty) {
+                                    if let Some((key_ty, _)) =
+                                        extract_map_key_value_through_option(field_ty)
+                                    {
                                         tokens.extend(quote! {
                                             #[inline(always)]
                                             pub fn #snake() -> rust_key_paths::KpType<'static, #name, #field_ty> {

@@ -1,6 +1,6 @@
 [package]
 name = "rust-key-paths"
-version = "2.9.3"
+version = "2.9.5"
 edition = "2024"
 authors = ["Codefonsi <info@codefonsi.com>"]
 license = "MPL-2.0"
@@ -38,6 +38,6 @@ tagged_core = ["tagged-core/default"]
 tokio = ["dep:tokio"]
 
 [dev-dependencies]
-tagged-core = "1.0.1"
+tagged-core = "1.0.3"
 pin-project = "1.1"
 key-paths-derive = { path = "key-paths-derive" }

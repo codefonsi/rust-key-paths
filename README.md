@@ -265,3 +265,25 @@ Static keypath (chain built once, reused) matches or beats direct lock for sync 
 ## 📜 License
 
 * Mozilla Public License 2.0
+
+Todos 
+1. pub fn zip_kps - Done
+2. pub fn to_dynamic, - Done
+2. impl<'a, R, V> From<KpType<'a, R, V>> for KpDynamic<R, V>, - Done
+2. pub fn into_dynamic(self) -> KpDynamic<R, V> - Done
+2. pub fn from_closures - Done
+3. KpType, KpDynamic, - Done
+3. pub type KpComposed<R, V> - Done
+4. lock
+5. async_lock
+6. pin
+7. PKP - Done
+8. AKP - Done
+9. pub trait ChainExt
+10. pub trait AccessorTrait - Done
+11. pub trait CoercionTrait - Done
+12. pub trait HofTrait - fn map - Done
+13. Helper functions + enum_variant - Done
+14. Send + Sync for Kp and EnumKP - X
+15. HOF enumkp - X
+16. Trait seprated and moved to new file - Done
